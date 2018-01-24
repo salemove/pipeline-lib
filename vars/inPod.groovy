@@ -1,10 +1,16 @@
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     cloud: 'CI',
-    name: 'pipeline-build'
+    name: 'pipeline-build',
+    containers: [agentContainer(image: 'jenkins/jnlp-slave:alpine')]
   ]
 
-  def finalArgs = defaultArgs << args
+  // For containers, add the lists together, but remove duplicates by name,
+  // giving precedence to the user specified args.
+  def finalContainers = (args.containers ?: []) + defaultArgs.containers
+  finalContainers.unique { it.getArguments().name }
+
+  def finalArgs = defaultArgs << args << [containers: finalContainers]
 
   // Include hashcode, because otherwise some changes to the template might not
   // get picked up
