@@ -1,3 +1,5 @@
+import static com.salemove.Collections.addWithoutDuplicates
+
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     name: 'pipeline-ruby-build',
@@ -25,11 +27,8 @@ def call(Map args = [:], Closure body) {
   // For containers and volumes (list arguments), add the lists together, but
   // remove duplicates by name and mountPath respectively, giving precedence to
   // the user specified args.
-  def finalContainers = (args.containers ?: []) + defaultArgs.containers
-  finalContainers.unique { it.getArguments().name }
-
-  def finalVolumes = (args.volumes ?: []) + defaultArgs.volumes
-  finalVolumes.unique { it.getArguments().mountPath }
+  def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
+  def finalVolumes = addWithoutDuplicates((args.volumes ?: []), defaultArgs.volumes) { it.getArguments().mountPath }
 
   def finalArgs = defaultArgs << args << [
     containers: finalContainers,

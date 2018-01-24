@@ -1,3 +1,5 @@
+import static com.salemove.Collections.addWithoutDuplicates
+
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     cloud: 'CI',
@@ -7,8 +9,7 @@ def call(Map args = [:], Closure body) {
 
   // For containers, add the lists together, but remove duplicates by name,
   // giving precedence to the user specified args.
-  def finalContainers = (args.containers ?: []) + defaultArgs.containers
-  finalContainers.unique { it.getArguments().name }
+  def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
 
   def finalArgs = defaultArgs << args << [containers: finalContainers]
 
