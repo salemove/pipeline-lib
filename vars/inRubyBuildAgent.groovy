@@ -1,28 +1,19 @@
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
-    cloud: 'CI',
+    name: 'pipeline-ruby-build',
     containers: [
-      containerTemplate(
-        name: 'jnlp',
-        image: 'salemove/jenkins-agent-ruby:2.4.1',
-        workingDir: '/root', // Required for docker.withRegistry to work
-        ttyEnabled: true
-      ),
-      containerTemplate(
+      agentContainer(image: 'salemove/jenkins-agent-ruby:2.4.1'),
+      passiveContainer(
         name: 'db',
         image: 'postgres:9.5.7-alpine',
-        ttyEnabled: false,
-        command: null, args: null, // Explicitly set command and args to null to use default container entrypoint
         envVars: [
           envVar(key: 'POSTGRES_USER', value: 'salemove'),
           envVar(key: 'POSTGRES_PASSWORD', value: 'salemovepass')
         ]
       ),
-      containerTemplate(
+      passiveContainer(
         name: 'rabbitmq',
-        image: 'rabbitmq:3.6.10-alpine',
-        ttyEnabled: false,
-        command: null, args: null // Explicitly set command and args to null to use default container entrypoint
+        image: 'rabbitmq:3.6.10-alpine'
       )
     ],
     volumes: [
@@ -45,16 +36,7 @@ def call(Map args = [:], Closure body) {
     volumes: finalVolumes
   ]
 
-  // Include hashcode, because otherwise some changes to the template might not
-  // get picked up
-  def podLabel = "pipeline-ruby-build-${finalArgs.hashCode()}"
-
-  podTemplate(finalArgs << [
-    name: podLabel,
-    label: podLabel,
-  ]) {
-    node(podLabel) {
-      body()
-    }
+  inPod(finalArgs) {
+    body()
   }
 }
