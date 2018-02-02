@@ -1,5 +1,5 @@
 def call(Map args) {
-  // Explicitly set command, args, and workingDir to null to use contianer defaults
+  // Explicitly set command, args, and workingDir to null to use container defaults
   def defaultArgs = [
     ttyEnabled: false,
     command: null,
