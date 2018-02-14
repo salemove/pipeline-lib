@@ -12,10 +12,10 @@ def call(Map args = [:], Closure body) {
     currentBuild.result = 'FAILED'
     throw e
   } finally {
+    // currentBuild.result of null indicates success.
+    def currentResult = currentBuild.result ?: 'SUCCESS'
     switch(finalArgs.strategy) {
       case 'onMainBranchChange':
-        // currentBuild.result of null indicates success.
-        def currentResult = currentBuild.result ?: 'SUCCESS'
         def statusChanged = currentBuild.getPreviousBuild()?.result != currentResult
         if (statusChanged && BRANCH_NAME == finalArgs.mainBranch) {
           if (currentResult == 'SUCCESS') {
@@ -23,6 +23,11 @@ def call(Map args = [:], Closure body) {
           } else {
             slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${JOB_NAME} ${BUILD_URL}")
           }
+        }
+        break
+      case 'onFailure':
+        if (currentResult != 'SUCCESS') {
+          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${JOB_NAME} ${BUILD_URL}")
         }
         break
       default:
