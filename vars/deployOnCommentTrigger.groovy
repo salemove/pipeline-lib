@@ -21,7 +21,7 @@ def call(Map args) {
       }
 
       echo("Deploying the image")
-      new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer']) + [
+      new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer', 'inAcceptance']) + [
         imageName: "${dockerRegistryURI}/${args.image.id}:${imageTag}"
       ]).deploy()
 

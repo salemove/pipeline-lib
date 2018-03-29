@@ -27,12 +27,13 @@ class Deployer implements Serializable {
   ]
   private static final deploymentUpdateTimeout = [time: 5, unit: 'MINUTES']
 
-  private def script, kubernetesDeployment, kubernetesContainer, imageName
+  private def script, kubernetesDeployment, kubernetesContainer, imageName, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
     this.kubernetesContainer = args.kubernetesContainer
     this.imageName = args.imageName
+    this.inAcceptance = args.inAcceptance
   }
 
   def deploy() {
@@ -43,7 +44,7 @@ class Deployer implements Serializable {
       withRollbackManagement { deploy, rollBack ->
         script.lock('acceptance-environment') {
           deploy(envs.acceptance)
-          runSmokes()
+          runAcceptanceChecks()
           rollBack()
         }
         script.lock('beta-and-prod-environments') {
@@ -157,9 +158,9 @@ class Deployer implements Serializable {
     return rollBack
   }
 
-  private def runSmokes() {
+  private def runAcceptanceChecks() {
     script.stage('Running smoke tests') {
-      script.build('visitor_app_2_smoke')
+      inAcceptance()
     }
   }
 
