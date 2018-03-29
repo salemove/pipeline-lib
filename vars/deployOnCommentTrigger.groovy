@@ -1,6 +1,8 @@
-@groovy.transform.Field deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
-@groovy.transform.Field dockerRegistryURI = '662491802882.dkr.ecr.us-east-1.amazonaws.com'
-@groovy.transform.Field dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
+import groovy.transform.Field
+
+@Field deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
+@Field dockerRegistryURI = '662491802882.dkr.ecr.us-east-1.amazonaws.com'
+@Field dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
 def call(Map args) {
   def isDeployBuild = currentBuild.rawBuild.getCause(
