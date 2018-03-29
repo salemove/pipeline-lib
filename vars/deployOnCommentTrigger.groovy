@@ -1,3 +1,4 @@
+import com.salemove.Deployer
 import groovy.transform.Field
 
 @Field deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
@@ -20,23 +21,9 @@ def call(Map args) {
       }
 
       echo("Deploying the image")
-      build(
-        job: 'Deploy',
-        parameters: [
-          string(
-            name: 'deployment',
-            value: args.kubernetesDeployment
-          ),
-          string(
-            name: 'container',
-            value: args.kubernetesContainer
-          ),
-          string(
-            name: 'image',
-            value: "${dockerRegistryURI}/${args.image.id}:${imageTag}"
-          )
-        ]
-      )
+      new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer']) + [
+        imageName: "${dockerRegistryURI}/${args.image.id}:${imageTag}"
+      ]).deploy()
 
       // Mark the current job's status as success, for the PR to be
       // mergeable.
