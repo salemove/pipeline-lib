@@ -12,9 +12,11 @@ def call(Map args) {
   if (isDeployBuild) {
     pullRequest.comment("Deploying. Follow progress [here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))")
     try {
-      echo("Publishing docker image ${args.image.imageName()} with tag ${args.imageTag}")
+      def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
+
+      echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
       docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
-        args.image.push(args.imageTag)
+        args.image.push(imageTag)
       }
 
       echo("Deploying the image")
@@ -31,7 +33,7 @@ def call(Map args) {
           ),
           string(
             name: 'image',
-            value: "${dockerRegistryURI}/${args.image.id}:${args.imageTag}"
+            value: "${dockerRegistryURI}/${args.image.id}:${imageTag}"
           )
         ]
       )
