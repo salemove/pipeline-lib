@@ -1,11 +1,22 @@
+import static com.salemove.Collections.addWithoutDuplicates
 import com.salemove.Deployer
 import groovy.transform.Field
 
 @Field deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
-@Field dockerRegistryURI = '662491802882.dkr.ecr.us-east-1.amazonaws.com'
+@Field dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
 @Field dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-def call(Map args) {
+def wrapPodTemplate(Map args = [:]) {
+  // For containers and volumes, add the lists together, but remove duplicates
+  // by name and mountPath respectively, giving precedence to the user
+  // specified args.
+  args + [
+    containers: addWithoutDuplicates((args.containers ?: []), Deployer.containers(this)) { it.getArguments().name },
+    volumes: addWithoutDuplicates((args.volumes ?: []), Deployer.volumes(this)) { it.getArguments().mountPath }
+  ]
+}
+
+def deployOnCommentTrigger(Map args) {
   def isDeployBuild = currentBuild.rawBuild.getCause(
     org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
   ).asBoolean()
@@ -16,13 +27,13 @@ def call(Map args) {
       def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
 
       echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
-      docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
+      docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
         args.image.push(imageTag)
       }
 
       echo("Deploying the image")
       new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer', 'inAcceptance']) + [
-        imageName: "${dockerRegistryURI}/${args.image.id}:${imageTag}"
+        imageTag: imageTag
       ]).deploy()
 
       // Mark the current job's status as success, for the PR to be
