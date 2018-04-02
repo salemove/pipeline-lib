@@ -139,7 +139,10 @@ class Deployer implements Serializable {
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
-                script.sh("${deployCmd} --version ${rollbackImageTag}")
+                script.sh(
+                  "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
+                  " --version ${rollbackImageTag}"
+                )
               }
             }
           } catch(e) {
