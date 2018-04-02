@@ -20,7 +20,7 @@ def call(Map args = [:], Closure body) {
     ],
     volumes: [
       hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock'),
-      hostPathVolume(hostPath: '/mnt/ruby-build/', mountPath: '/usr/local/bundle')
+      hostPathVolume(hostPath: '/mnt/ruby-build/cache', mountPath: '/usr/local/bundle/cache')
     ]
   ]
 
