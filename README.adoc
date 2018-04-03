@@ -1,11 +1,140 @@
 = pipeline-lib
 :toc: macro
 :toc-title:
+:toclevels: 2
 
 Global shared library for SaleMove pipeline jobs
 
 == Table of Contents
 toc::[]
+
+== Introduction
+:link-shared-library: https://jenkins.io/doc/book/pipeline/shared-libraries/
+
+This is a {link-shared-library}[Shared Jenkins Library] that's automatically
+imported into every Jenkinsfile. The automatic loading means that all the
+<<_global_variables>> described below are always available in every
+Jenkinsfile.
+
+== Global variables
+
+=== `deployer`
+
+`deployer` supports branch deploys.footnote:[Feature branches are deployed to and
+validated in production before merging back to master.]
+
+To migrate an existing project out from the current orchestrated release
+flow and to adopt Continuous Deployment via branch deploys, follow these
+steps:
+
+. Upgrade the project's Jenkinsfile to:
+.. Add a `issueCommentTrigger('!deploy')` build trigger
+.. Wrap the arguments of `podTemplate`, <<_code_inpod_code>>, or other with
+`deployer.wrapPodTemplate`
+.. Call `deployer.deployOnCommentTrigger` after the code has been tested and
+a Docker image built
+. Remove the project from all current release files footnote:[See e.g.
+https://github.com/salemove/release/pull/769[release#769]. This ensures that
+the production version isn't overwritten by a release currently in beta, for
+example.]
+. Add `continuous-integration/jenkins/pr-merge/deploy` as a required check in
+GitHub
+
+Each step is explained in detail below.
+
+==== Adding a issue comment trigger
+
+In a declarative pipeline, add a `triggers` section to the main `pipeline`
+directive as follows.
+[source,groovy]
+----
+pipeline {
+  // ...
+  triggers {
+    issueCommentTrigger('!deploy')
+  }
+  // ...
+}
+----
+
+In a scripted pipeline, include the following snippet at the top level.
+[source,groovy]
+----
+properties([
+  pipelineTriggers([issueCommentTrigger('!deploy')])
+])
+----
+
+==== Wrapping the pod template
+
+Here's an example.
+[source,diff]
+----
+-inDockerAgent(containers: [imageScanner.container()]) {
++inDockerAgent(deployer.wrapPodTemplate(containers: [imageScanner.container()])) {
+   // ...
+ }
+----
+
+==== Enabling deploy on comment trigger
+:link-using-libraries: https://jenkins.io/doc/book/pipeline/shared-libraries/#using-libraries
+
+The exact changes required depend on the project, but here's an example.
+[source,diff]
+----
+ // At the top level
++@Library('SaleMoveAcceptance') _ // <1>
+
+ // In podTemplate, inPod, or similar, after building a docker image
+ def image = docker.build('call-router')
+ imageScanner.scan(image)
+-def shortCommit = sh(returnStdout: true, script: 'git log -n 1 --pretty=format:"%h"').trim()
+-docker.withRegistry(DOCKER_REGISTRY_URL, DOCKER_REGISTRY_CREDENTIALS_ID) {
+-  image.push(shortCommit) // <2>
+-}
+
++deployer.deployOnCommentTrigger(
++  image: image,
++  kubernetesDeployment: 'call-router',
++  kubernetesContainer: 'call-router',
++  inAcceptance: {
++    runAcceptanceTests(
++      driver: 'chrome',
++      visitorApp: 'v2',
++      suite: 'acceptance_test_pattern[lib/engagement/omnicall/**/*_{spec,tests}.rb]', // <3>
++      slackChannel: '#tm-engage,
++      parallelTestProcessors: 1
++    )
++  }
++)
+
+-build(job: 'kubernetes-deploy', ...)
+----
+<1> This is needed for running acceptance tests before deploying to other
+environments. If you already have a `@Library` import followed by a single
+underscore, then change the underscore to two underscores (`__`) or more, as
+required. The symbol {link-using-libraries}[has to be unique] within the Jenkinsfile.
+<2> No need to push the image to anywhere. Just build it and pass to
+`deployOnCommentTrigger`, which tags and pushes as required.
+<3> The tests and the other checks run in acceptance obviously vary by project.
+
+==== Disabling merges for non-deployed PRs
+:link-call-router-settings: https://github.com/salemove/call-router/settings/branches/master
+
+* Open the {link-call-router-settings}[master branch settings for the
+project].footnote:[`call-router` settings are linked here as an example.
+Click *Settings* -> *Branches* -> *Edit* `master` in GitHub to access.]
+* Check *Require status checks to pass before merging*, if not already checked
+* Check the `continuous-integration/jenkins/pr-merge/deploy` status
+footnote:[The status only becomes available for selection if GitHub has seen
+the status on at least one commit in the project. If it's not available, then
+wait until at least one PR has been deployed.] footnote:[Ensure that
+`continuous-integration/jenkins/pr-merge` and `review/squash` are also
+checked.]
+
+
+=== `inPod`
+
 
 == Developing
 
@@ -22,3 +151,4 @@ open README.html # <2>
 ----
 <1> This doesn't exit, so following commands have to be entered elsewhere
 <2> Opens the preview in browser. Manually refresh browser as necessary
+
