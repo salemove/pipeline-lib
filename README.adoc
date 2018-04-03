@@ -1,0 +1,24 @@
+= pipeline-lib
+:toc: macro
+:toc-title:
+
+Global shared library for SaleMove pipeline jobs
+
+== Table of Contents
+toc::[]
+
+== Developing
+
+Guard is used for providing a preview of the documentation. Run the following
+commands to open a preview of the rendered documentation in a browser.
+Unfortunately there's no live reload - just refresh the browser whenever you
+save changes to `README.adoc`.
+
+[source,bash]
+----
+bin/bundle install
+bin/guard # <1>
+open README.html # <2>
+----
+<1> This doesn't exit, so following commands have to be entered elsewhere
+<2> Opens the preview in browser. Manually refresh browser as necessary
