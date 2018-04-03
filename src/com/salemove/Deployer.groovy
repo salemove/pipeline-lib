@@ -1,7 +1,7 @@
 package com.salemove
 
 class Deployer implements Serializable {
-  private static final kubectlContainer = 'kubectl'
+  private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
     acceptance: [
@@ -26,40 +26,46 @@ class Deployer implements Serializable {
     ]
   ]
   private static final deploymentUpdateTimeout = [time: 5, unit: 'MINUTES']
+  private static final releaseProjectSubdir = '__release'
+  private static final rootDirRelativeToReleaseProject = '..'
+  private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
 
-  private def script, kubernetesDeployment, kubernetesContainer, imageName, inAcceptance
+  private def script, kubernetesDeployment, kubernetesContainer, imageTag, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
     this.kubernetesContainer = args.kubernetesContainer
-    this.imageName = args.imageName
+    this.imageTag = args.imageTag
     this.inAcceptance = args.inAcceptance
   }
 
+  static def containers(script) {
+    [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:0f02bf5')]
+  }
+  static def volumes(script) {
+    [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
+  }
+
   def deploy() {
-    script.inPod(
-      containers: [script.interactiveContainer(name: kubectlContainer, image: 'lachlanevenson/k8s-kubectl:latest')],
-      volumes: [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
-    ) {
-      withRollbackManagement { deploy, rollBack ->
-        script.lock('acceptance-environment') {
-          deploy(envs.acceptance)
-          runAcceptanceChecks()
-          rollBack()
-        }
-        script.lock('beta-and-prod-environments') {
-          deploy(envs.beta)
-          waitForValidationIn(envs.beta)
-          script.parallel(
-            US: { deploy(envs.prodUS) },
-            EU: { deploy(envs.prodEU) }
-          )
-          waitForValidationIn(envs.prodUS)
-          waitForValidationIn(envs.prodEU)
-        }
-        script.lock('acceptance-environment') {
-          deploy(envs.acceptance)
-        }
+    prepareReleaseTool()
+    withRollbackManagement { deploy, rollBack ->
+      script.lock('acceptance-environment') {
+        deploy(envs.acceptance)
+        runAcceptanceChecks()
+        rollBack()
+      }
+      script.lock('beta-and-prod-environments') {
+        deploy(envs.beta)
+        waitForValidationIn(envs.beta)
+        script.parallel(
+          US: { deploy(envs.prodUS) },
+          EU: { deploy(envs.prodEU) }
+        )
+        waitForValidationIn(envs.prodUS)
+        waitForValidationIn(envs.prodEU)
+      }
+      script.lock('acceptance-environment') {
+        deploy(envs.acceptance)
       }
     }
   }
@@ -75,39 +81,41 @@ class Deployer implements Serializable {
     script.sh(returnStdout: true, script: secureCmd).trim()
   }
 
-  private def getCurrentImage(String kubectlCmd) {
+  private def getCurrentImageTag(String kubectlCmd) {
     def currentImageJsonpath = "{.spec.template.spec.containers[?(@.name==\"${kubernetesContainer}\")].image}"
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath=${currentImageJsonpath}'")
+      .split(':')
+      .last()
   }
 
-  private def notifyDeploying(env, rollbackImage) {
+  private def notifyDeploying(env, rollbackImageTag) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Updating deployment/${kubernetesDeployment} image to ${kubernetesContainer}=${imageName}" +
-        " in ${env.name}. The current image is ${kubernetesContainer}=${rollbackImage}."
+      message: "Updating deployment/${kubernetesDeployment} ${kubernetesContainer} image to tag ${imageTag}" +
+        " in ${env.name}. The current ${kubernetesContainer} image tag is ${rollbackImageTag}."
     )
   }
   private def notifyDeploySuccessful(env) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
-      message: "Successfully updated deployment/${kubernetesDeployment} image to" +
-        " ${kubernetesContainer}=${imageName} in ${env.name}."
+      message: "Successfully updated deployment/${kubernetesDeployment} ${kubernetesContainer}" +
+        " image to tag ${imageTag} in ${env.name}."
     )
   }
-  private def notifyRollingBack(env, rollbackImage) {
+  private def notifyRollingBack(env, rollbackImageTag) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Rolling back deployment/${kubernetesDeployment} image to ${kubernetesContainer}=${rollbackImage}" +
-        " in ${env.name}."
+      message: "Rolling back deployment/${kubernetesDeployment} ${kubernetesContainer} image" +
+        " to tag ${rollbackImageTag} in ${env.name}."
     )
   }
-  private def notifyRollbackFailed(env, rollbackImage) {
+  private def notifyRollbackFailed(env, rollbackImageTag) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} image to" +
-        " ${kubernetesContainer}=${rollbackImage} in ${env.name}. Manual intervention is required!"
+      message: "Failed to roll back deployment/${kubernetesDeployment} ${kubernetesContainer}" +
+        " image to tag ${rollbackImageTag} in ${env.name}. Manual intervention is required!"
     )
   }
 
@@ -116,19 +124,29 @@ class Deployer implements Serializable {
       " --kubeconfig=${kubeConfFolderPath}/config" +
       " --context=${env.kubeContext}" +
       " --namespace=default"
+    def deployCmd = "${releaseProjectSubdir}/deploy_service.rb" +
+      " --kubeconfig ${kubeConfFolderPath}/config" +
+      " --context '${env.kubeContext}'" +
+      ' --namespace default' +
+      " --application ${kubernetesDeployment}" +
+      ' --no-release-managed'
 
-    def rollbackImage
+    def rollbackImageTag
     def rollBack = {
       script.stage("Rolling back deployment in ${env.name}") {
-        script.container(kubectlContainer) {
-          notifyRollingBack(env, rollbackImage)
+        script.container(containerName) {
+          notifyRollingBack(env, rollbackImageTag)
           try {
             script.timeout(deploymentUpdateTimeout) {
-              script.sh("${kubectlCmd} set image deployment/${kubernetesDeployment} ${kubernetesContainer}=${rollbackImage}")
-              script.sh("${kubectlCmd} rollout status deployments ${kubernetesDeployment}")
+              script.sshagent([deployerSSHAgent]) {
+                script.sh(
+                  "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
+                  " --version ${rollbackImageTag}"
+                )
+              }
             }
           } catch(e) {
-            notifyRollbackFailed(env, rollbackImage)
+            notifyRollbackFailed(env, rollbackImageTag)
             throw(e)
           }
         }
@@ -136,13 +154,19 @@ class Deployer implements Serializable {
     }
 
     script.stage("Deploying to ${env.name}") {
-      script.container(kubectlContainer) {
-        rollbackImage = getCurrentImage(kubectlCmd)
-        notifyDeploying(env, rollbackImage)
+      script.container(containerName) {
+        rollbackImageTag = getCurrentImageTag(kubectlCmd)
+        notifyDeploying(env, rollbackImageTag)
         try {
           script.timeout(deploymentUpdateTimeout) {
-            script.sh("${kubectlCmd} set image deployment/${kubernetesDeployment} ${kubernetesContainer}=${imageName}")
-            script.sh("${kubectlCmd} rollout status deployments ${kubernetesDeployment}")
+            script.sshagent([deployerSSHAgent]) {
+              // Specify --existing-repository-path, because this version of
+              // code hasn't been pushed to GitHub yet and is only available locally
+              script.sh(
+                "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
+                " --version ${imageTag}"
+              )
+            }
           }
         } catch(e) {
           // Handle rollout timeout here, instead of forcing the caller to handle
@@ -200,6 +224,21 @@ class Deployer implements Serializable {
       script.echo("Deploy either failed or was aborted. Rolling back changes in all affected environments.")
       rollBack()
       throw(e)
+    }
+  }
+
+  private def prepareReleaseTool() {
+    script.checkout([
+      $class: 'GitSCM',
+      branches: [[name: 'master']],
+      userRemoteConfigs: [[
+        url: 'https://github.com/salemove/release.git',
+        credentialsId: script.scm.userRemoteConfigs.first().credentialsId
+      ]],
+      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir]]
+    ])
+    script.container(containerName) {
+      script.sh("cd ${releaseProjectSubdir} && bundle install")
     }
   }
 }
