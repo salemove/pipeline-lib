@@ -5,22 +5,26 @@ class Deployer implements Serializable {
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
     acceptance: [
-      name: 'acceptance',
+      displayName: 'acceptance',
+      kubeEnvName: 'acceptance',
       kubeContext: '',
       slackChannel: '#ci'
     ],
     beta: [
-      name: 'beta',
+      displayName: 'beta',
+      kubeEnvName: 'beta',
       kubeContext: 'staging',
       slackChannel: '#beta'
     ],
     prodUS: [
-      name: 'production US',
+      displayName: 'production US',
+      kubeEnvName: 'prod-us',
       kubeContext: 'prod-us',
       slackChannel: '#production'
     ],
     prodEU: [
-      name: 'production EU',
+      displayName: 'production EU',
+      kubeEnvName: 'prod-eu',
       kubeContext: 'prod-eu',
       slackChannel: '#production'
     ]
@@ -92,7 +96,7 @@ class Deployer implements Serializable {
     script.slackSend(
       channel: env.slackChannel,
       message: "Updating deployment/${kubernetesDeployment} ${kubernetesContainer} image to tag ${imageTag}" +
-        " in ${env.name}. The current ${kubernetesContainer} image tag is ${rollbackImageTag}."
+        " in ${env.displayName}. The current ${kubernetesContainer} image tag is ${rollbackImageTag}."
     )
   }
   private def notifyDeploySuccessful(env) {
@@ -100,14 +104,14 @@ class Deployer implements Serializable {
       channel: env.slackChannel,
       color: 'good',
       message: "Successfully updated deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${imageTag} in ${env.name}."
+        " image to tag ${imageTag} in ${env.displayName}."
     )
   }
   private def notifyRollingBack(env, rollbackImageTag) {
     script.slackSend(
       channel: env.slackChannel,
       message: "Rolling back deployment/${kubernetesDeployment} ${kubernetesContainer} image" +
-        " to tag ${rollbackImageTag} in ${env.name}."
+        " to tag ${rollbackImageTag} in ${env.displayName}."
     )
   }
   private def notifyRollbackFailed(env, rollbackImageTag) {
@@ -115,7 +119,7 @@ class Deployer implements Serializable {
       channel: env.slackChannel,
       color: 'danger',
       message: "Failed to roll back deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${rollbackImageTag} in ${env.name}. Manual intervention is required!"
+        " image to tag ${rollbackImageTag} in ${env.displayName}. Manual intervention is required!"
     )
   }
 
@@ -126,6 +130,7 @@ class Deployer implements Serializable {
       " --namespace=default"
     def deployCmd = "${releaseProjectSubdir}/deploy_service.rb" +
       " --kubeconfig ${kubeConfFolderPath}/config" +
+      " --environment ${env.kubeEnvName}" +
       " --context '${env.kubeContext}'" +
       ' --namespace default' +
       " --application ${kubernetesDeployment}" +
@@ -133,16 +138,13 @@ class Deployer implements Serializable {
 
     def rollbackImageTag
     def rollBack = {
-      script.stage("Rolling back deployment in ${env.name}") {
+      script.stage("Rolling back deployment in ${env.displayName}") {
         script.container(containerName) {
           notifyRollingBack(env, rollbackImageTag)
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
-                script.sh(
-                  "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
-                  " --version ${rollbackImageTag}"
-                )
+                script.sh("${deployCmd} --version ${rollbackImageTag}")
               }
             }
           } catch(e) {
@@ -153,7 +155,7 @@ class Deployer implements Serializable {
       }
     }
 
-    script.stage("Deploying to ${env.name}") {
+    script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
         rollbackImageTag = getCurrentImageTag(kubectlCmd)
         notifyDeploying(env, rollbackImageTag)
@@ -189,8 +191,8 @@ class Deployer implements Serializable {
   }
 
   private def waitForValidationIn(env) {
-    script.stage("Validation in ${env.name}") {
-      script.input("Is the change OK in ${env.name}?")
+    script.stage("Validation in ${env.displayName}") {
+      script.input("Is the change OK in ${env.displayName}?")
     }
   }
 
