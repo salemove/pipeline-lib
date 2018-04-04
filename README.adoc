@@ -2,6 +2,8 @@
 :toc: macro
 :toc-title:
 :toclevels: 2
+:idseparator: -
+:idprefix:
 
 Global shared library for SaleMove pipeline jobs
 
@@ -13,7 +15,7 @@ toc::[]
 
 This is a {link-shared-library}[Shared Jenkins Library] that's automatically
 imported into every Jenkinsfile. The automatic loading means that all the
-<<_global_variables>> described below are always available in every
+<<global-variables>> described below are always available in every
 Jenkinsfile.
 
 == Global variables
@@ -29,7 +31,7 @@ steps:
 
 . Upgrade the project's Jenkinsfile to:
 .. Add a `issueCommentTrigger('!deploy')` build trigger
-.. Wrap the arguments of `podTemplate`, <<_code_inpod_code>>, or other with
+.. Wrap the arguments of `podTemplate`, <<code-inpod-code>>, or other with
 `deployer.wrapPodTemplate`
 .. Call `deployer.deployOnCommentTrigger` after the code has been tested and
 a Docker image built
@@ -164,11 +166,10 @@ providing a unique suffix to the pod label using the hash of the provided
 argument map.
 
 IMPORTANT: When using `inPod` or its derivatives, it's best to also use
-<<_code_passivecontainer_code>>, <<_code_interactivecontainer_code>>, and
-<<_code_agentcontainer_code>> instead of using `containerTemplate`
-directly. This is because the `containerTemplate` wrappers provided by
-this library all share the same `workingDir`, which makes them work nicely
-together.
+<<code-passivecontainer-code>>, <<code-interactivecontainer-code>>, and
+<<code-agentcontainer-code>> instead of using `containerTemplate` directly.
+This is because the `containerTemplate` wrappers provided by this library all
+share the same `workingDir`, which makes them work nicely together.
 
 === `inDockerAgent`
 :link-docker-build: https://jenkins.io/doc/book/pipeline/docker/#building-containers
@@ -181,16 +182,16 @@ the container is changed with `container`.] which supports building docker
 images. So if you need to run {link-docker-build}[`docker.build`], use
 `inDockerAgent` instead of `inPod`.
 
-NOTE: `inDockerAgent` is a derivative of <<_code_inpod_code>>, so
-everything that applies to `inPod` also applies to `inDockerAgent`.
+NOTE: `inDockerAgent` is a derivative of <<code-inpod-code>>, so everything
+that applies to `inPod` also applies to `inDockerAgent`.
 
 === `inRubyBuildAgent`
 
 A pod template for building Ruby projects. Comes with an agent container
 with Ruby and Docker support and PostgreSQL and RabbitMQ containers.
 
-NOTE: `inRubyBuildAgent` is a derivative of <<_code_inpod_code>>, so
-everything that applies to `inPod` also applies to `inRubyBuildAgent`.
+NOTE: `inRubyBuildAgent` is a derivative of <<code-inpod-code>>, so everything
+that applies to `inPod` also applies to `inRubyBuildAgent`.
 
 === `passiveContainer`
 
