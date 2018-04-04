@@ -269,6 +269,45 @@ Ruby.
 WARNING: Only specify the `name`, `workingDir`, `command`, `args`, and/or
 `ttyEnabled` fields for `agentContainer` if you know what you're doing.
 
+=== `withResultReporting`
+
+A scripted pipeline footnote:[As opposed to declarative pipelines.]
+wrapper that sends build status notifications to Slack.
+
+Without specifying any arguments it sends Slack notifications to the #ci
+channel whenever a master branch build status changes from success to failure
+or back. To send notifications to your team's channel, specify the
+`slackChannel` argument.
+[source,groovy]
+----
+withResultReporting(slackChannel: '#tm-engage') {
+  inPod {
+    checkout(scm)
+    // Build
+  }
+}
+----
+
+TIP: If the main branch in a project is different from `master`, then reporting
+can be enabled for that branch by specifying `mainBranch`. E.g.
+`withResultReporting(mainBranch: 'develop')`.
+
+For non-branch builds, such as cronjobs or manually started jobs, the above
+status reporting strategy does not make sense. In these cases a simpler
+`onFailure` strategy can be used.
+[source,groovy]
+----
+properties([
+  pipelineTriggers([cron('30 10 * * 5')])
+])
+
+withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
+  inPod {
+    // Do something
+  }
+}
+----
+
 == Developing
 
 Guard is used for providing a preview of the documentation. Run the following
