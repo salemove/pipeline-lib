@@ -134,7 +134,140 @@ checked.]
 
 
 === `inPod`
+:link-pod-template: https://github.com/jenkinsci/kubernetes-plugin#pod-and-container-template-configuration
+:link-node: https://jenkins.io/doc/pipeline/steps/workflow-durable-task-step/#code-node-code-allocate-node
 
+`inPod` is a thin wrapper around the {link-pod-template}[Kubernetes plugin
+`podTemplate`] + a nested {link-node}[`node`] call. Every setting that can
+be provided to `podTemplate` can be provided to `inPod` and its
+derivatives (described below).
+
+It provides default values for fields such as `cloud` and `name`, so that
+you don't need to worry about them. It makes creating a basic worker pod
+very simple. For example, let's say you want to build something in NodeJS.
+The following snippet is everything you need to achieve just that.
+
+[source,groovy]
+----
+inPod(containers: [interactiveContainer(name: 'node', image: 'node:9-alpine')]) {
+  checkout(scm)
+  container('node') {
+    sh('npm install && npm test')
+  }
+}
+----
+
+NOTE: `inPod` and its derivatives also include a workaround for an issue with
+the Kubernetes plugin where the `label` has to be updated for changes to the
+container or volume configurations to take effect. It's fixed by automatically
+providing a unique suffix to the pod label using the hash of the provided
+argument map.
+
+IMPORTANT: When using `inPod` or its derivatives, it's best to also use
+<<_code_passivecontainer_code>>, <<_code_interactivecontainer_code>>, and
+<<_code_agentcontainer_code>> instead of using `containerTemplate`
+directly. This is because the `containerTemplate` wrappers provided by
+this library all share the same `workingDir`, which makes them work nicely
+together.
+
+=== `inDockerAgent`
+:link-docker-build: https://jenkins.io/doc/book/pipeline/docker/#building-containers
+
+A pod template for building docker containers.
+
+Unlike `inPod`, `inDockerAgent` has an agent container footnote:[A
+container named `jnlp`, in which all commands will run by default, unless
+the container is changed with `container`.] which supports building docker
+images. So if you need to run {link-docker-build}[`docker.build`], use
+`inDockerAgent` instead of `inPod`.
+
+NOTE: `inDockerAgent` is a derivative of <<_code_inpod_code>>, so
+everything that applies to `inPod` also applies to `inDockerAgent`.
+
+=== `inRubyBuildAgent`
+
+A pod template for building Ruby projects. Comes with an agent container
+with Ruby and Docker support and PostgreSQL and RabbitMQ containers.
+
+NOTE: `inRubyBuildAgent` is a derivative of <<_code_inpod_code>>, so
+everything that applies to `inPod` also applies to `inRubyBuildAgent`.
+
+=== `passiveContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for databases and other
+services that will not have pipeline steps executed in them. `name` and
+`image` fields are required.
+
+Example:
+[source,groovy]
+----
+inPod(
+  containers: [
+    passiveContainer(
+      name: 'db',
+      image: 'postgres:9.5-alpine',
+      envVars: [
+        envVar(key: 'POSTGRES_USER', value: 'myuser'),
+        envVar(key: 'POSTGRES_PASSWORD', value: 'mypass')
+      ]
+    )
+  ]
+) {
+  // Access the PostgreSQL DB over its default port 5432 at localhost
+}
+----
+
+WARNING: Only specify the `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `passiveContainer` if you know what you're doing.
+
+=== `interactiveContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for containers that
+will have pipeline steps executed in them. `name` and `image` fields are
+required. Pipeline steps can be executed in the container by wrapping them
+with `container`.
+
+Example:
+[source,groovy]
+----
+inPod(containers: [interactiveContainer(name: 'ruby', image: 'ruby:2.5-alpine')]) {
+  checkout(scm)
+  container('ruby') {
+    sh('bundle install')
+  }
+}
+----
+
+WARNING: Only specify the `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `interactiveContainer` if you know what you're
+doing.
+
+NOTE: `interactiveContainer` specifies `/bin/sh -c cat` as the entrypoint
+for the image, so that the image doesn't exit. This allows you to run
+arbitrary commands with `container` + `sh` within the container.
+
+=== `agentContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for agent containers.
+Only the `image` field is required. It replaces the default `jnlp`
+container with the one provided as the `image`. The specified image has to
+be a Jenkins slave agent.
+
+Example:
+[source,groovy]
+----
+inPod(containers: [agentContainer(image: 'salemove/jenkins-agent-ruby:2.4.1')]) {
+  checkout(scm)
+  sh('bundle install && rake') // <1>
+  docker.build('my-ruby-project')
+}
+----
+<1> Compared to the `interactiveContainer` example above, this doesn't
+have to be wrapped in a `container`, because the agent itself supports
+Ruby.
+
+WARNING: Only specify the `name`, `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `agentContainer` if you know what you're doing.
 
 == Developing
 
