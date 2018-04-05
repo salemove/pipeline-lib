@@ -1,0 +1,334 @@
+= pipeline-lib
+:toc: macro
+:toc-title:
+:toclevels: 2
+:idseparator: -
+:idprefix:
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+Global shared library for SaleMove pipeline jobs
+
+== Table of Contents
+toc::[]
+
+== Introduction
+:link-shared-library: https://jenkins.io/doc/book/pipeline/shared-libraries/
+
+This is a {link-shared-library}[Shared Jenkins Library] that's automatically
+imported into every Jenkinsfile. The automatic loading means that all the
+<<global-variables>> described below are always available in every
+Jenkinsfile.
+
+== Global variables
+
+=== `deployer`
+
+`deployer` supports branch deploys.footnote:[Feature branches are deployed to and
+validated in production before merging back to master.]
+
+To migrate an existing project out from the current orchestrated release
+flow and to adopt Continuous Deployment via branch deploys, follow these
+steps:
+
+. Upgrade the project's Jenkinsfile to:
+.. Add a `issueCommentTrigger('!deploy')` build trigger
+.. Wrap the arguments of `podTemplate`, <<code-inpod-code>>, or other with
+`deployer.wrapPodTemplate`
+.. Call `deployer.deployOnCommentTrigger` after the code has been tested and
+a Docker image built
+. Remove the project from all current release files footnote:[See e.g.
+https://github.com/salemove/release/pull/769[release#769]. This ensures that
+the production version isn't overwritten by a release currently in beta, for
+example.]
+. Add `continuous-integration/jenkins/pr-merge/deploy` as a required check in
+GitHub
+
+Each step is explained in detail below.
+
+==== Adding a issue comment trigger
+
+In a declarative pipeline, add a `triggers` section to the main `pipeline`
+directive as follows.
+[source,groovy]
+----
+pipeline {
+  // ...
+  triggers {
+    issueCommentTrigger('!deploy')
+  }
+  // ...
+}
+----
+
+In a scripted pipeline, include the following snippet at the top level.
+[source,groovy]
+----
+properties([
+  pipelineTriggers([issueCommentTrigger('!deploy')])
+])
+----
+
+==== Wrapping the pod template
+
+Here's an example.
+[source,diff]
+----
+-inDockerAgent(containers: [imageScanner.container()]) {
++inDockerAgent(deployer.wrapPodTemplate(containers: [imageScanner.container()])) {
+   // ...
+ }
+----
+
+==== Enabling deploy on comment trigger
+:link-using-libraries: https://jenkins.io/doc/book/pipeline/shared-libraries/#using-libraries
+
+The exact changes required depend on the project, but here's an example.
+[source,diff]
+----
+ // At the top level
++@Library('SaleMoveAcceptance') _ // <1>
+
+ // In podTemplate, inPod, or similar, after building a docker image
+ def image = docker.build('call-router')
+ imageScanner.scan(image)
+-def shortCommit = sh(returnStdout: true, script: 'git log -n 1 --pretty=format:"%h"').trim()
+-docker.withRegistry(DOCKER_REGISTRY_URL, DOCKER_REGISTRY_CREDENTIALS_ID) {
+-  image.push(shortCommit) // <2>
+-}
+
++deployer.deployOnCommentTrigger(
++  image: image,
++  kubernetesDeployment: 'call-router',
++  kubernetesContainer: 'call-router',
++  inAcceptance: {
++    runAcceptanceTests(
++      driver: 'chrome',
++      visitorApp: 'v2',
++      suite: 'acceptance_test_pattern[lib/engagement/omnicall/**/*_{spec,tests}.rb]', // <3>
++      slackChannel: '#tm-engage,
++      parallelTestProcessors: 1
++    )
++  }
++)
+
+-build(job: 'kubernetes-deploy', ...)
+----
+<1> This is needed for running acceptance tests before deploying to other
+environments. If you already have a `@Library` import followed by a single
+underscore, then change the underscore to two underscores (`__`) or more, as
+required. The symbol {link-using-libraries}[has to be unique] within the Jenkinsfile.
+<2> No need to push the image to anywhere. Just build it and pass to
+`deployOnCommentTrigger`, which tags and pushes as required.
+<3> The tests and the other checks run in acceptance obviously vary by project.
+
+==== Disabling merges for non-deployed PRs
+:link-call-router-settings: https://github.com/salemove/call-router/settings/branches/master
+
+* Open the {link-call-router-settings}[master branch settings for the
+project].footnote:[`call-router` settings are linked here as an example.
+Click *Settings* -> *Branches* -> *Edit* `master` in GitHub to access.]
+* Check *Require status checks to pass before merging*, if not already checked
+* Check the `continuous-integration/jenkins/pr-merge/deploy` status
+footnote:[The status only becomes available for selection if GitHub has seen
+the status on at least one commit in the project. If it's not available, then
+wait until at least one PR has been deployed.] footnote:[Ensure that
+`continuous-integration/jenkins/pr-merge` and `review/squash` are also
+checked.]
+
+
+=== `inPod`
+:link-pod-template: https://github.com/jenkinsci/kubernetes-plugin#pod-and-container-template-configuration
+:link-node: https://jenkins.io/doc/pipeline/steps/workflow-durable-task-step/#code-node-code-allocate-node
+
+`inPod` is a thin wrapper around the {link-pod-template}[Kubernetes plugin
+`podTemplate`] + a nested {link-node}[`node`] call. Every setting that can
+be provided to `podTemplate` can be provided to `inPod` and its
+derivatives (described below).
+
+It provides default values for fields such as `cloud` and `name`, so that
+you don't need to worry about them. It makes creating a basic worker pod
+very simple. For example, let's say you want to build something in NodeJS.
+The following snippet is everything you need to achieve just that.
+
+[source,groovy]
+----
+inPod(containers: [interactiveContainer(name: 'node', image: 'node:9-alpine')]) {
+  checkout(scm)
+  container('node') {
+    sh('npm install && npm test')
+  }
+}
+----
+
+NOTE: `inPod` and its derivatives also include a workaround for an issue with
+the Kubernetes plugin where the `label` has to be updated for changes to the
+container or volume configurations to take effect. It's fixed by automatically
+providing a unique suffix to the pod label using the hash of the provided
+argument map.
+
+IMPORTANT: When using `inPod` or its derivatives, it's best to also use
+<<code-passivecontainer-code>>, <<code-interactivecontainer-code>>, and
+<<code-agentcontainer-code>> instead of using `containerTemplate` directly.
+This is because the `containerTemplate` wrappers provided by this library all
+share the same `workingDir`, which makes them work nicely together.
+
+=== `inDockerAgent`
+:link-docker-build: https://jenkins.io/doc/book/pipeline/docker/#building-containers
+
+A pod template for building docker containers.
+
+Unlike `inPod`, `inDockerAgent` has an agent container footnote:[A
+container named `jnlp`, in which all commands will run by default, unless
+the container is changed with `container`.] which supports building docker
+images. So if you need to run {link-docker-build}[`docker.build`], use
+`inDockerAgent` instead of `inPod`.
+
+NOTE: `inDockerAgent` is a derivative of <<code-inpod-code>>, so everything
+that applies to `inPod` also applies to `inDockerAgent`.
+
+=== `inRubyBuildAgent`
+
+A pod template for building Ruby projects. Comes with an agent container
+with Ruby and Docker support and PostgreSQL and RabbitMQ containers.
+
+NOTE: `inRubyBuildAgent` is a derivative of <<code-inpod-code>>, so everything
+that applies to `inPod` also applies to `inRubyBuildAgent`.
+
+=== `passiveContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for databases and other
+services that will not have pipeline steps executed in them. `name` and
+`image` fields are required.
+
+Example:
+[source,groovy]
+----
+inPod(
+  containers: [
+    passiveContainer(
+      name: 'db',
+      image: 'postgres:9.5-alpine',
+      envVars: [
+        envVar(key: 'POSTGRES_USER', value: 'myuser'),
+        envVar(key: 'POSTGRES_PASSWORD', value: 'mypass')
+      ]
+    )
+  ]
+) {
+  // Access the PostgreSQL DB over its default port 5432 at localhost
+}
+----
+
+WARNING: Only specify the `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `passiveContainer` if you know what you're doing.
+
+=== `interactiveContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for containers that
+will have pipeline steps executed in them. `name` and `image` fields are
+required. Pipeline steps can be executed in the container by wrapping them
+with `container`.
+
+Example:
+[source,groovy]
+----
+inPod(containers: [interactiveContainer(name: 'ruby', image: 'ruby:2.5-alpine')]) {
+  checkout(scm)
+  container('ruby') {
+    sh('bundle install')
+  }
+}
+----
+
+WARNING: Only specify the `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `interactiveContainer` if you know what you're
+doing.
+
+NOTE: `interactiveContainer` specifies `/bin/sh -c cat` as the entrypoint
+for the image, so that the image doesn't exit. This allows you to run
+arbitrary commands with `container` + `sh` within the container.
+
+=== `agentContainer`
+
+A {link-pod-template}[`containerTemplate`] wrapper for agent containers.
+Only the `image` field is required. It replaces the default `jnlp`
+container with the one provided as the `image`. The specified image has to
+be a Jenkins slave agent.
+
+Example:
+[source,groovy]
+----
+inPod(containers: [agentContainer(image: 'salemove/jenkins-agent-ruby:2.4.1')]) {
+  checkout(scm)
+  sh('bundle install && rake') // <1>
+  docker.build('my-ruby-project')
+}
+----
+<1> Compared to the `interactiveContainer` example above, this doesn't
+have to be wrapped in a `container`, because the agent itself supports
+Ruby.
+
+WARNING: Only specify the `name`, `workingDir`, `command`, `args`, and/or
+`ttyEnabled` fields for `agentContainer` if you know what you're doing.
+
+=== `withResultReporting`
+
+A scripted pipeline footnote:[As opposed to declarative pipelines.]
+wrapper that sends build status notifications to Slack.
+
+Without specifying any arguments it sends Slack notifications to the #ci
+channel whenever a master branch build status changes from success to failure
+or back. To send notifications to your team's channel, specify the
+`slackChannel` argument.
+[source,groovy]
+----
+withResultReporting(slackChannel: '#tm-engage') {
+  inPod {
+    checkout(scm)
+    // Build
+  }
+}
+----
+
+TIP: If the main branch in a project is different from `master`, then reporting
+can be enabled for that branch by specifying `mainBranch`. E.g.
+`withResultReporting(mainBranch: 'develop')`.
+
+For non-branch builds, such as cronjobs or manually started jobs, the above
+status reporting strategy does not make sense. In these cases a simpler
+`onFailure` strategy can be used.
+[source,groovy]
+----
+properties([
+  pipelineTriggers([cron('30 10 * * 5')])
+])
+
+withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
+  inPod {
+    // Do something
+  }
+}
+----
+
+== Developing
+
+Guard is used for providing a preview of the documentation. Run the following
+commands to open a preview of the rendered documentation in a browser.
+Unfortunately there's no live reload - just refresh the browser whenever you
+save changes to `README.adoc`.
+
+[source,bash]
+----
+bin/bundle install
+bin/guard # <1>
+open README.html # <2>
+----
+<1> This doesn't exit, so following commands have to be entered elsewhere
+<2> Opens the preview in browser. Manually refresh browser as necessary
+
