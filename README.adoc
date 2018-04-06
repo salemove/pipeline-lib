@@ -110,7 +110,7 @@ The exact changes required depend on the project, but here's an example.
 +    runAcceptanceTests(
 +      driver: 'chrome',
 +      visitorApp: 'v2',
-+      suite: 'acceptance_test_pattern[lib/engagement/omnicall/**/*_{spec,tests}.rb]', // <3>
++      suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <3>
 +      slackChannel: '#tm-engage,
 +      parallelTestProcessors: 1
 +    )
