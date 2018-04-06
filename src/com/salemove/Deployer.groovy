@@ -12,13 +12,13 @@ class Deployer implements Serializable {
     ],
     beta: [
       displayName: 'beta',
-      kubeEnvName: 'beta',
+      kubeEnvName: 'staging',
       kubeContext: 'staging',
       slackChannel: '#beta'
     ],
     prodUS: [
       displayName: 'production US',
-      kubeEnvName: 'prod-us',
+      kubeEnvName: 'production',
       kubeContext: 'prod-us',
       slackChannel: '#production'
     ],
