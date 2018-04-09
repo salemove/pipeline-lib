@@ -18,7 +18,7 @@ def wrapPodTemplate(Map args = [:]) {
 
 def wrapProperties(providedProperties = []) {
   providedProperties + [
-    pipelineTriggers([issueCommentTrigger('!deploy')]),
+    pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
     [
       $class: 'DatadogJobProperty',
       tagProperties:"is_deploy=${Deployer.getTriggerCause(this).asBoolean()}"
@@ -29,7 +29,7 @@ def wrapProperties(providedProperties = []) {
 def deployOnCommentTrigger(Map args) {
   def triggerCause = Deployer.getTriggerCause(this)
 
-  if (triggerCause) {
+  if (triggerCause && triggerCause.triggerPattern == Deployer.triggerPattern) {
     pullRequest.comment(
       "Deploying. @${triggerCause.userLogin}, please follow progress " +
       "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
@@ -83,6 +83,6 @@ def deployOnCommentTrigger(Map args) {
       throw(e)
     }
   } else {
-    echo('Build not triggered by !deploy comment. Not deploying')
+    echo("Build not triggered by ${Deployer.triggerPattern} comment. Not deploying")
   }
 }

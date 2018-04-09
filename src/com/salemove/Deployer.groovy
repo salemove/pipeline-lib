@@ -1,6 +1,8 @@
 package com.salemove
 
 class Deployer implements Serializable {
+  public static final triggerPattern = '!deploy'
+
   private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
