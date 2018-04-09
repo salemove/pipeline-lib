@@ -50,6 +50,12 @@ class Deployer implements Serializable {
     [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
   }
 
+  static def getTriggerCause(script) {
+    script.currentBuild.rawBuild.getCause(
+      org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
+    )
+  }
+
   def deploy() {
     prepareReleaseTool()
     withRollbackManagement { deploy, rollBack ->

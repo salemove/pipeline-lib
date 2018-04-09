@@ -54,7 +54,8 @@ Each step is explained in detail below.
 ==== Configuring the job's properties
 
 This adds a build trigger so that deploys can be started with `!deploy` PR
-comments.
+comments. It also configures the Datadog plugin, so that we can collect metrics
+about deployments.
 
 In a declarative pipeline, add a `properties` call before the `pipeline`
 directive as follows.

@@ -18,14 +18,16 @@ def wrapPodTemplate(Map args = [:]) {
 
 def wrapProperties(providedProperties = []) {
   providedProperties + [
-    pipelineTriggers([issueCommentTrigger('!deploy')])
+    pipelineTriggers([issueCommentTrigger('!deploy')]),
+    [
+      $class: 'DatadogJobProperty',
+      tagProperties:"is_deploy=${Deployer.getTriggerCause(this).asBoolean()}"
+    ]
   ]
 }
 
 def deployOnCommentTrigger(Map args) {
-  def isDeployBuild = currentBuild.rawBuild.getCause(
-    org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
-  ).asBoolean()
+  def isDeployBuild = Deployer.getTriggerCause(this).asBoolean()
 
   if (isDeployBuild) {
     pullRequest.comment("Deploying. Follow progress [here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))")
