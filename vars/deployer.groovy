@@ -27,10 +27,13 @@ def wrapProperties(providedProperties = []) {
 }
 
 def deployOnCommentTrigger(Map args) {
-  def isDeployBuild = Deployer.getTriggerCause(this).asBoolean()
+  def triggerCause = Deployer.getTriggerCause(this)
 
-  if (isDeployBuild) {
-    pullRequest.comment("Deploying. Follow progress [here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))")
+  if (triggerCause) {
+    pullRequest.comment(
+      "Deploying. @${triggerCause.userLogin}, please follow progress " +
+      "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
+    )
     try {
       def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
 
@@ -73,7 +76,10 @@ def deployOnCommentTrigger(Map args) {
         sh('git push origin @:master')
       }
     } catch(e) {
-      pullRequest.comment("Deploy failed or was aborted. Check [the logs](${BUILD_URL}/console) and try again.")
+      pullRequest.comment(
+        "Deploy failed or was aborted. @${triggerCause.userLogin}, " +
+        "please check [the logs](${BUILD_URL}/console) and try again."
+      )
       throw(e)
     }
   } else {
