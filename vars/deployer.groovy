@@ -85,8 +85,10 @@ def deployOnCommentTrigger(Map args) {
         def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
         sh("git remote set-url origin ${sshOriginURL}")
 
-        // And then push the merge commit to master
+        // And then push the merge commit to master, closing the PR
         sh('git push origin @:master')
+        // Clean up by deleting the now-merged branch
+        sh("git push origin --delete ${pullRequest.headRef}")
       }
     } catch(e) {
       pullRequest.comment(
