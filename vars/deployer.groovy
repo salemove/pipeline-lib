@@ -42,62 +42,63 @@ def wrapProperties(providedProperties = []) {
 def deployOnCommentTrigger(Map args) {
   def triggerCause = Deployer.getTriggerCause(this)
 
-  if (triggerCause && triggerCause.triggerPattern == Deployer.triggerPattern) {
-    pullRequest.comment(
-      "Deploying. @${triggerCause.userLogin}, please follow progress " +
-      "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
-    )
-    try {
-      def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
-
-      echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
-      docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
-        args.image.push(imageTag)
-      }
-
-      echo("Deploying the image")
-      new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer', 'inAcceptance']) + [
-        imageTag: imageTag
-      ]).deploy()
-
-      // Mark the current job's status as success, for the PR to be
-      // mergeable.
-      pullRequest.createStatus(
-        status: 'success',
-        context: 'continuous-integration/jenkins/pr-merge',
-        description: 'The PR has successfully been deployed',
-        targetUrl: BUILD_URL
-      )
-      // Mark a special deploy status as success, to indicate that the
-      // job has also been successfully deployed.
-      pullRequest.createStatus(
-        status: 'success',
-        context: Deployer.statusContext,
-        description: 'The PR has successfully been deployed',
-        targetUrl: BUILD_URL
-      )
-
-      sshagent([deployerSSHAgent]) {
-        // Make sure the remote uses a SSH URL for the push to work. By
-        // default it's an HTTPS URL, which when used to push a commit,
-        // will require user input.
-        def httpsOriginURL = sh(returnStdout: true, script: 'git remote get-url origin').trim()
-        def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
-        sh("git remote set-url origin ${sshOriginURL}")
-
-        // And then push the merge commit to master, closing the PR
-        sh('git push origin @:master')
-        // Clean up by deleting the now-merged branch
-        sh("git push origin --delete ${pullRequest.headRef}")
-      }
-    } catch(e) {
-      pullRequest.comment(
-        "Deploy failed or was aborted. @${triggerCause.userLogin}, " +
-        "please check [the logs](${BUILD_URL}/console) and try again."
-      )
-      throw(e)
-    }
-  } else {
+  if (!triggerCause || triggerCause.triggerPattern != Deployer.triggerPattern) {
     echo("Build not triggered by ${Deployer.triggerPattern} comment. Not deploying")
+    return
+  }
+
+  pullRequest.comment(
+    "Deploying. @${triggerCause.userLogin}, please follow progress " +
+    "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
+  )
+  try {
+    def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
+
+    echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
+    docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
+      args.image.push(imageTag)
+    }
+
+    echo("Deploying the image")
+    new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer', 'inAcceptance']) + [
+      imageTag: imageTag
+    ]).deploy()
+
+    // Mark the current job's status as success, for the PR to be
+    // mergeable.
+    pullRequest.createStatus(
+      status: 'success',
+      context: 'continuous-integration/jenkins/pr-merge',
+      description: 'The PR has successfully been deployed',
+      targetUrl: BUILD_URL
+    )
+    // Mark a special deploy status as success, to indicate that the
+    // job has also been successfully deployed.
+    pullRequest.createStatus(
+      status: 'success',
+      context: Deployer.statusContext,
+      description: 'The PR has successfully been deployed',
+      targetUrl: BUILD_URL
+    )
+
+    sshagent([deployerSSHAgent]) {
+      // Make sure the remote uses a SSH URL for the push to work. By
+      // default it's an HTTPS URL, which when used to push a commit,
+      // will require user input.
+      def httpsOriginURL = sh(returnStdout: true, script: 'git remote get-url origin').trim()
+      def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
+      sh("git remote set-url origin ${sshOriginURL}")
+
+      // And then push the merge commit to master, closing the PR
+      sh('git push origin @:master')
+      // Clean up by deleting the now-merged branch
+      sh("git push origin --delete ${pullRequest.headRef}")
+    }
+  } catch(e) {
+    pullRequest.comment(
+      "Deploy failed or was aborted. @${triggerCause.userLogin}, " +
+      "please check [the logs](${BUILD_URL}/console) and try again."
+    )
+    throw(e)
   }
 }
