@@ -47,11 +47,11 @@ def deployOnCommentTrigger(Map args) {
     return
   }
 
-  pullRequest.comment(
-    "Deploying. @${triggerCause.userLogin}, please follow progress " +
-    "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
-  )
   try {
+    pullRequest.comment(
+      "Deploying. @${triggerCause.userLogin}, please follow progress " +
+      "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
+    )
     def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
 
     echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
@@ -95,6 +95,12 @@ def deployOnCommentTrigger(Map args) {
       sh("git push origin --delete ${pullRequest.headRef}")
     }
   } catch(e) {
+    pullRequest.createStatus(
+      status: 'failure',
+      context: Deployer.statusContext,
+      description: 'Deploy either failed or was aborted',
+      targetUrl: BUILD_URL
+    )
     pullRequest.comment(
       "Deploy failed or was aborted. @${triggerCause.userLogin}, " +
       "please check [the logs](${BUILD_URL}/console) and try again."
