@@ -16,6 +16,12 @@ def wrapPodTemplate(Map args = [:]) {
   ]
 }
 
+def wrapProperties(providedProperties = []) {
+  providedProperties + [
+    pipelineTriggers([issueCommentTrigger('!deploy')])
+  ]
+}
+
 def deployOnCommentTrigger(Map args) {
   def isDeployBuild = currentBuild.rawBuild.getCause(
     org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause

@@ -37,7 +37,7 @@ flow and to adopt Continuous Deployment via branch deploys, follow these
 steps:
 
 . Upgrade the project's Jenkinsfile to:
-.. Add a `issueCommentTrigger('!deploy')` build trigger
+.. Configure the job's properties
 .. Wrap the arguments of `podTemplate`, <<code-inpod-code>>, or other with
 `deployer.wrapPodTemplate`
 .. Call `deployer.deployOnCommentTrigger` after the code has been tested and
@@ -51,27 +51,38 @@ GitHub
 
 Each step is explained in detail below.
 
-==== Adding a issue comment trigger
+==== Configuring the job's properties
 
-In a declarative pipeline, add a `triggers` section to the main `pipeline`
+This adds a build trigger so that deploys can be started with `!deploy` PR
+comments.
+
+In a declarative pipeline, add a `properties` call before the `pipeline`
 directive as follows.
-[source,groovy]
+[source,diff]
 ----
-pipeline {
-  // ...
-  triggers {
-    issueCommentTrigger('!deploy')
-  }
-  // ...
-}
++properties(deployer.wrapProperties())
++
+ pipeline {
+   // ...
+ }
 ----
 
-In a scripted pipeline, include the following snippet at the top level.
+In a scripted pipeline, include the same `properties` call:
 [source,groovy]
 ----
-properties([
-  pipelineTriggers([issueCommentTrigger('!deploy')])
-])
+properties(deployer.wrapProperties())
+----
+
+Or wrap an existing `properties` call with the provided wrapper:
+[source,diff]
+----
+-properties([
++properties(deployer.wrapProperties([
+   parameters([
+     string(name: 'my-param', defaultValue: 'my-val', description: 'A description')
+   ])
+-])
++]))
 ----
 
 ==== Wrapping the pod template
