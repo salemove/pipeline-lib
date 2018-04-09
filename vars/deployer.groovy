@@ -30,11 +30,17 @@ def wrapProperties(providedProperties = []) {
     )
   }
 
+  def tags = [
+    "is_deploy=${Deployer.getTriggerCause(this).asBoolean()}",
+    // Remove PR number or branch name suffix from the job name
+    "project=${JOB_NAME.replaceFirst(/\/[^\/]+$/, '')}"
+  ]
+
   providedProperties + [
     pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
     [
       $class: 'DatadogJobProperty',
-      tagProperties:"is_deploy=${Deployer.getTriggerCause(this).asBoolean()}"
+      tagProperties: tags.join("\n")
     ]
   ]
 }
