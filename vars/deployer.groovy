@@ -24,7 +24,7 @@ def wrapProperties(providedProperties = []) {
     // deploying.
     pullRequest.createStatus(
       status: 'pending',
-      context: Deployer.statusContext,
+      context: Deployer.deployStatusContext,
       description: 'The PR shouldn\'t be merged before it\'s deployed.',
       targetUrl: BUILD_URL
     )
@@ -48,6 +48,18 @@ def deployOnCommentTrigger(Map args) {
   }
 
   try {
+    def nonSuccessStatuses = pullRequest.statuses.findAll {
+      // Ignore statuses that are managed by this build. They're expected to be
+      // 'pending' at this point.
+      it.context != Deployer.deployStatusContext &&
+        it.context != Deployer.buildStatusContext &&
+        it.state != 'success'
+    }
+    if (!nonSuccessStatuses.empty) {
+      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
+      error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
+    }
+
     pullRequest.comment(
       "Deploying. @${triggerCause.userLogin}, please follow progress " +
       "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
@@ -68,7 +80,7 @@ def deployOnCommentTrigger(Map args) {
     // mergeable.
     pullRequest.createStatus(
       status: 'success',
-      context: 'continuous-integration/jenkins/pr-merge',
+      context: Deployer.buildStatusContext,
       description: 'The PR has successfully been deployed',
       targetUrl: BUILD_URL
     )
@@ -76,7 +88,7 @@ def deployOnCommentTrigger(Map args) {
     // job has also been successfully deployed.
     pullRequest.createStatus(
       status: 'success',
-      context: Deployer.statusContext,
+      context: Deployer.deployStatusContext,
       description: 'The PR has successfully been deployed',
       targetUrl: BUILD_URL
     )
@@ -97,7 +109,7 @@ def deployOnCommentTrigger(Map args) {
   } catch(e) {
     pullRequest.createStatus(
       status: 'failure',
-      context: Deployer.statusContext,
+      context: Deployer.deployStatusContext,
       description: 'Deploy either failed or was aborted',
       targetUrl: BUILD_URL
     )

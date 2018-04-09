@@ -2,7 +2,8 @@ package com.salemove
 
 class Deployer implements Serializable {
   public static final triggerPattern = '!deploy'
-  public static final statusContext = 'continuous-integration/jenkins/pr-merge/deploy'
+  public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
+  public static final buildStatusContext = 'continuous-integration/jenkins/pr-merge'
 
   private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube'
