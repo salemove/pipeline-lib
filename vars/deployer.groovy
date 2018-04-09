@@ -17,6 +17,19 @@ def wrapPodTemplate(Map args = [:]) {
 }
 
 def wrapProperties(providedProperties = []) {
+  def isPRBuild = !!env.CHANGE_ID
+  if (isPRBuild) {
+    // Mark a special deploy status as pending, to indicate as soon as possible,
+    // that this project now uses branch deploys and shouldn't be merged without
+    // deploying.
+    pullRequest.createStatus(
+      status: 'pending',
+      context: Deployer.statusContext,
+      description: 'The PR shouldn\'t be merged before it\'s deployed.',
+      targetUrl: BUILD_URL
+    )
+  }
+
   providedProperties + [
     pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
     [
@@ -59,7 +72,7 @@ def deployOnCommentTrigger(Map args) {
       // job has also been successfully deployed.
       pullRequest.createStatus(
         status: 'success',
-        context: 'continuous-integration/jenkins/pr-merge/deploy',
+        context: Deployer.statusContext,
         description: 'The PR has successfully been deployed',
         targetUrl: BUILD_URL
       )

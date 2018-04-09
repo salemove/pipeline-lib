@@ -148,10 +148,10 @@ Click *Settings* -> *Branches* -> *Edit* `master` in GitHub to access.]
 * Check *Require status checks to pass before merging*, if not already checked
 * Check the `continuous-integration/jenkins/pr-merge/deploy` status
 footnote:[The status only becomes available for selection if GitHub has seen
-the status on at least one commit in the project. If it's not available, then
-wait until at least one PR has been deployed.] footnote:[Ensure that
-`continuous-integration/jenkins/pr-merge` and `review/squash` are also
-checked.]
+the status on at least one commit in the project. It should appear as soon as
+you've opened a PR with the Jenkinsfile changes described above.]
+footnote:[Ensure that `continuous-integration/jenkins/pr-merge` and
+`review/squash` are also checked.]
 
 
 === `inPod`
