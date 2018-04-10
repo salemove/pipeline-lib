@@ -31,7 +31,7 @@ def wrapProperties(providedProperties = []) {
   }
 
   def tags = [
-    "is_deploy=${Deployer.getTriggerCause(this).asBoolean()}",
+    "is_deploy=${Deployer.isDeploy(this)}",
     // Remove PR number or branch name suffix from the job name
     "project=${JOB_NAME.replaceFirst(/\/[^\/]+$/, '')}"
   ]
@@ -46,9 +46,7 @@ def wrapProperties(providedProperties = []) {
 }
 
 def deployOnCommentTrigger(Map args) {
-  def triggerCause = Deployer.getTriggerCause(this)
-
-  if (!triggerCause || triggerCause.triggerPattern != Deployer.triggerPattern) {
+  if (!Deployer.isDeploy(this)) {
     echo("Build not triggered by ${Deployer.triggerPattern} comment. Not deploying")
     return
   }
@@ -67,7 +65,7 @@ def deployOnCommentTrigger(Map args) {
     }
 
     pullRequest.comment(
-      "Deploying. @${triggerCause.userLogin}, please follow progress " +
+      "Deploying. @${Deployer.deployingUser(this)}, please follow progress " +
       "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
     )
     def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
@@ -120,7 +118,7 @@ def deployOnCommentTrigger(Map args) {
       targetUrl: BUILD_URL
     )
     pullRequest.comment(
-      "Deploy failed or was aborted. @${triggerCause.userLogin}, " +
+      "Deploy failed or was aborted. @${Deployer.deployingUser(this)}, " +
       "please check [the logs](${BUILD_URL}/console) and try again."
     )
     throw(e)

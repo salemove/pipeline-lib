@@ -54,7 +54,16 @@ class Deployer implements Serializable {
     [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
   }
 
-  static def getTriggerCause(script) {
+  static def isDeploy(script) {
+    def triggerCause = getTriggerCause(script)
+    triggerCause && triggerCause.triggerPattern == triggerPattern
+  }
+
+  static def deployingUser(script) {
+    getTriggerCause(script).userLogin
+  }
+
+  private static def getTriggerCause(script) {
     script.currentBuild.rawBuild.getCause(
       org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
     )
