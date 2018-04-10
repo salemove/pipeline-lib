@@ -64,16 +64,16 @@ def deployOnCommentTrigger(Map args) {
       error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
     }
 
-    def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
+    def version = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
 
-    echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")
+    echo("Publishing docker image ${args.image.imageName()} with tag ${version}")
     docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
-      args.image.push(imageTag)
+      args.image.push(version)
     }
 
     echo("Deploying the image")
-    new Deployer(this, args.subMap(['kubernetesDeployment', 'kubernetesContainer', 'inAcceptance']) + [
-      imageTag: imageTag
+    new Deployer(this, args.subMap(['kubernetesDeployment', 'inAcceptance']) + [
+      version: version
     ]).deploy()
 
     // Mark the current job's status as success, for the PR to be

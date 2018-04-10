@@ -38,12 +38,11 @@ class Deployer implements Serializable {
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
 
-  private def script, kubernetesDeployment, kubernetesContainer, imageTag, inAcceptance
+  private def script, kubernetesDeployment, version, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
-    this.kubernetesContainer = args.kubernetesContainer
-    this.imageTag = args.imageTag
+    this.version = args.version
     this.inAcceptance = args.inAcceptance
   }
 
@@ -105,41 +104,38 @@ class Deployer implements Serializable {
     script.sh(returnStdout: true, script: secureCmd).trim()
   }
 
-  private def getCurrentImageTag(String kubectlCmd) {
-    def currentImageJsonpath = "{.spec.template.spec.containers[?(@.name==\"${kubernetesContainer}\")].image}"
-    shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath=${currentImageJsonpath}'")
-      .split(':')
-      .last()
+  private def getCurrentVersion(String kubectlCmd) {
+    shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
-  private def notifyDeploying(env, rollbackImageTag) {
+  private def notifyDeploying(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Updating deployment/${kubernetesDeployment} ${kubernetesContainer} image to tag ${imageTag}" +
-        " in ${env.displayName}. The current ${kubernetesContainer} image tag is ${rollbackImageTag}."
+      message: "Updating deployment/${kubernetesDeployment} to version ${version} in ${env.displayName}." +
+        " The current version is ${rollbackVersion}."
     )
   }
   private def notifyDeploySuccessful(env) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
-      message: "Successfully updated deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${imageTag} in ${env.displayName}."
+      message: "Successfully updated deployment/${kubernetesDeployment} to version ${version}" +
+        " in ${env.displayName}."
     )
   }
-  private def notifyRollingBack(env, rollbackImageTag) {
+  private def notifyRollingBack(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Rolling back deployment/${kubernetesDeployment} ${kubernetesContainer} image" +
-        " to tag ${rollbackImageTag} in ${env.displayName}."
+      message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+        " in ${env.displayName}."
     )
   }
-  private def notifyRollbackFailed(env, rollbackImageTag) {
+  private def notifyRollbackFailed(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${rollbackImageTag} in ${env.displayName}. Manual intervention is required!"
+      message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+        " in ${env.displayName}. Manual intervention is required!"
     )
   }
 
@@ -156,19 +152,19 @@ class Deployer implements Serializable {
       " --application ${kubernetesDeployment}" +
       ' --no-release-managed'
 
-    def rollbackImageTag
+    def rollbackVersion
     def rollBack = {
       script.stage("Rolling back deployment in ${env.displayName}") {
         script.container(containerName) {
-          notifyRollingBack(env, rollbackImageTag)
+          notifyRollingBack(env, rollbackVersion)
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
-                script.sh("${deployCmd} --version ${rollbackImageTag}")
+                script.sh("${deployCmd} --version ${rollbackVersion}")
               }
             }
           } catch(e) {
-            notifyRollbackFailed(env, rollbackImageTag)
+            notifyRollbackFailed(env, rollbackVersion)
             throw(e)
           }
         }
@@ -177,8 +173,8 @@ class Deployer implements Serializable {
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
-        rollbackImageTag = getCurrentImageTag(kubectlCmd)
-        notifyDeploying(env, rollbackImageTag)
+        rollbackVersion = getCurrentVersion(kubectlCmd)
+        notifyDeploying(env, rollbackVersion)
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -186,7 +182,7 @@ class Deployer implements Serializable {
               // code hasn't been pushed to GitHub yet and is only available locally
               script.sh(
                 "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
-                " --version ${imageTag}"
+                " --version ${version}"
               )
             }
           }
