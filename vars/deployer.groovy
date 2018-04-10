@@ -64,10 +64,6 @@ def deployOnCommentTrigger(Map args) {
       error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
     }
 
-    pullRequest.comment(
-      "Deploying. @${Deployer.deployingUser(this)}, please follow progress " +
-      "[here](${RUN_DISPLAY_URL}) (or [in old UI](${BUILD_URL}/console))"
-    )
     def imageTag = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
 
     echo("Publishing docker image ${args.image.imageName()} with tag ${imageTag}")

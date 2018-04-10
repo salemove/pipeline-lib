@@ -77,6 +77,7 @@ class Deployer implements Serializable {
         runAcceptanceChecks()
         rollBackForLockedResource()
       }
+      confirmNonAcceptanceDeploy()
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
         deploy(envs.beta)
         waitForValidationIn(envs.beta)
@@ -212,6 +213,17 @@ class Deployer implements Serializable {
   private def waitForValidationIn(env) {
     script.stage("Validation in ${env.displayName}") {
       script.input("Is the change OK in ${env.displayName}?")
+    }
+  }
+
+  private def confirmNonAcceptanceDeploy() {
+    script.stage('Waiting for permission before deploying to non-acceptance environments') {
+      script.pullRequest.comment(
+        "@${deployingUser(script)}, the changes were validated in acceptance. Please click **Proceed** " +
+        "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console)) to " +
+        'continue the deployment.'
+      )
+      script.input('The change was validated in acceptance. Continue with other environments?')
     }
   }
 
