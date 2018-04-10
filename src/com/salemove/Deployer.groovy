@@ -1,6 +1,10 @@
 package com.salemove
 
 class Deployer implements Serializable {
+  public static final triggerPattern = '!deploy'
+  public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
+  public static final buildStatusContext = 'continuous-integration/jenkins/pr-merge'
+
   private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
@@ -34,12 +38,11 @@ class Deployer implements Serializable {
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
 
-  private def script, kubernetesDeployment, kubernetesContainer, imageTag, inAcceptance
+  private def script, kubernetesDeployment, version, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
-    this.kubernetesContainer = args.kubernetesContainer
-    this.imageTag = args.imageTag
+    this.version = args.version
     this.inAcceptance = args.inAcceptance
   }
 
@@ -50,15 +53,31 @@ class Deployer implements Serializable {
     [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
   }
 
+  static def isDeploy(script) {
+    def triggerCause = getTriggerCause(script)
+    triggerCause && triggerCause.triggerPattern == triggerPattern
+  }
+
+  static def deployingUser(script) {
+    getTriggerCause(script).userLogin
+  }
+
+  private static def getTriggerCause(script) {
+    script.currentBuild.rawBuild.getCause(
+      org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
+    )
+  }
+
   def deploy() {
     prepareReleaseTool()
-    withRollbackManagement { deploy, rollBack ->
-      script.lock('acceptance-environment') {
+    withRollbackManagement { withLock ->
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(envs.acceptance)
         runAcceptanceChecks()
-        rollBack()
+        rollBackForLockedResource()
       }
-      script.lock('beta-and-prod-environments') {
+      confirmNonAcceptanceDeploy()
+      withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
         deploy(envs.beta)
         waitForValidationIn(envs.beta)
         script.parallel(
@@ -68,7 +87,7 @@ class Deployer implements Serializable {
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
       }
-      script.lock('acceptance-environment') {
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(envs.acceptance)
       }
     }
@@ -85,41 +104,39 @@ class Deployer implements Serializable {
     script.sh(returnStdout: true, script: secureCmd).trim()
   }
 
-  private def getCurrentImageTag(String kubectlCmd) {
-    def currentImageJsonpath = "{.spec.template.spec.containers[?(@.name==\"${kubernetesContainer}\")].image}"
-    shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath=${currentImageJsonpath}'")
-      .split(':')
-      .last()
+  private def getCurrentVersion(String kubectlCmd) {
+    shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
-  private def notifyDeploying(env, rollbackImageTag) {
+  private def notifyDeploying(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Updating deployment/${kubernetesDeployment} ${kubernetesContainer} image to tag ${imageTag}" +
-        " in ${env.displayName}. The current ${kubernetesContainer} image tag is ${rollbackImageTag}."
+      message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
+        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}." +
+        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
   private def notifyDeploySuccessful(env) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
-      message: "Successfully updated deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${imageTag} in ${env.displayName}."
+      message: "Successfully updated deployment/${kubernetesDeployment} to version ${version}" +
+        " in ${env.displayName}."
     )
   }
-  private def notifyRollingBack(env, rollbackImageTag) {
+  private def notifyRollingBack(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Rolling back deployment/${kubernetesDeployment} ${kubernetesContainer} image" +
-        " to tag ${rollbackImageTag} in ${env.displayName}."
+      message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+        " in ${env.displayName}."
     )
   }
-  private def notifyRollbackFailed(env, rollbackImageTag) {
+  private def notifyRollbackFailed(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} ${kubernetesContainer}" +
-        " image to tag ${rollbackImageTag} in ${env.displayName}. Manual intervention is required!"
+      message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+        " in ${env.displayName}. Manual intervention is required!"
     )
   }
 
@@ -136,19 +153,19 @@ class Deployer implements Serializable {
       " --application ${kubernetesDeployment}" +
       ' --no-release-managed'
 
-    def rollbackImageTag
+    def rollbackVersion
     def rollBack = {
       script.stage("Rolling back deployment in ${env.displayName}") {
         script.container(containerName) {
-          notifyRollingBack(env, rollbackImageTag)
+          notifyRollingBack(env, rollbackVersion)
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
-                script.sh("${deployCmd} --version ${rollbackImageTag}")
+                script.sh("${deployCmd} --version ${rollbackVersion}")
               }
             }
           } catch(e) {
-            notifyRollbackFailed(env, rollbackImageTag)
+            notifyRollbackFailed(env, rollbackVersion)
             throw(e)
           }
         }
@@ -157,8 +174,8 @@ class Deployer implements Serializable {
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
-        rollbackImageTag = getCurrentImageTag(kubectlCmd)
-        notifyDeploying(env, rollbackImageTag)
+        rollbackVersion = getCurrentVersion(kubectlCmd)
+        notifyDeploying(env, rollbackVersion)
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -166,7 +183,7 @@ class Deployer implements Serializable {
               // code hasn't been pushed to GitHub yet and is only available locally
               script.sh(
                 "${deployCmd} --existing-repository-path ${rootDirRelativeToReleaseProject}" +
-                " --version ${imageTag}"
+                " --version ${version}"
               )
             }
           }
@@ -196,36 +213,85 @@ class Deployer implements Serializable {
     }
   }
 
+  private def confirmNonAcceptanceDeploy() {
+    script.stage('Waiting for permission before deploying to non-acceptance environments') {
+      script.pullRequest.comment(
+        "@${deployingUser(script)}, the changes were validated in acceptance. Please click **Proceed** " +
+        "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console)) to " +
+        'continue the deployment.'
+      )
+      script.input('The change was validated in acceptance. Continue with other environments?')
+    }
+  }
+
   private def withRollbackManagement(Closure body) {
     def rollbacks = []
-    def deploy = { env ->
-      rollbacks = [deployEnv(env)] + rollbacks
+    def rollBackAll = {
+      def rollBackByResource = rollbacks
+        .groupBy { it.lockedResource }
+        .collectEntries { lockedResource, rollbacksForResource ->
+          [(lockedResource): {
+            script.lock(lockedResource) {
+              executeRollbacks(rollbacksForResource)
+            }
+          }]
+        }
+      try {
+        script.parallel(rollBackByResource)
+      } finally {
+        rollbacks = []
+      }
     }
-    def rollBack = {
-      def exception
-      rollbacks.each {
+
+    def withLock = { String resource, Closure withLockBody ->
+      def deploy = { env ->
+        rollbacks = [[
+          lockedResource: resource,
+          closure: deployEnv(env)
+        ]] + rollbacks
+      }
+      def rollBackForLockedResource = {
+        def (toRollBack, toRetain) = rollbacks.split { it.lockedResource == resource }
         try {
-          it()
-        } catch(e) {
-          exception = e
-          script.echo("Rollback failed with ${e}!")
-          // Allow rest of the the rollbacks to also execute
+          executeRollbacks(toRollBack)
+        } finally {
+          rollbacks = toRetain
         }
       }
-      rollbacks = []
-      if (exception) {
-        // Re-throw the last exception, if there were any, to signal that the
-        // job (including the rollbacks) didn't execute successfully.
-        throw(exception)
+
+      script.lock(resource) {
+        try {
+          withLockBody(deploy, rollBackForLockedResource)
+        } catch(e) {
+          rollBackForLockedResource()
+          throw(e)
+        }
       }
     }
 
     try {
-      body(deploy, rollBack)
+      body(withLock)
     } catch(e) {
-      script.echo("Deploy either failed or was aborted. Rolling back changes in all affected environments.")
-      rollBack()
+      script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
+      rollBackAll()
       throw(e)
+    }
+  }
+
+  private def executeRollbacks(rollbacks) {
+    def exception
+    rollbacks.each {
+      try {
+        it.closure()
+      } catch(e) {
+        exception = e
+        script.echo("The following exception was thrown. Continuing regardless. ${e}!")
+      }
+    }
+    if (exception) {
+      // Re-throw the last exception, if there were any, once all rollbacks
+      // have been executed.
+      throw(exception)
     }
   }
 
