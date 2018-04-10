@@ -52,13 +52,19 @@ def deployOnCommentTrigger(Map args) {
   }
 
   try {
-    def nonSuccessStatuses = pullRequest.statuses.findAll {
+    def nonSuccessStatuses = pullRequest.statuses
       // Ignore statuses that are managed by this build. They're expected to be
       // 'pending' at this point.
-      it.context != Deployer.deployStatusContext &&
-        it.context != Deployer.buildStatusContext &&
-        it.state != 'success'
-    }
+      .findAll { it.context != Deployer.deployStatusContext && it.context != Deployer.buildStatusContext }
+      // groupBy + collect to reduce multiple pending statuses + success status
+      // to a single success status. For non-success statuses, if there are
+      // many different states, use the last one.
+      .groupBy { it.context }
+      .collect { context, statuses ->
+        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
+      }
+      .findAll { it.state != 'success' }
+
     if (!nonSuccessStatuses.empty) {
       def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
       error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
