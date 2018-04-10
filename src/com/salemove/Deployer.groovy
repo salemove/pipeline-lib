@@ -71,13 +71,13 @@ class Deployer implements Serializable {
 
   def deploy() {
     prepareReleaseTool()
-    withRollbackManagement { deploy, rollBack ->
-      script.lock('acceptance-environment') {
+    withRollbackManagement { withLock ->
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(envs.acceptance)
         runAcceptanceChecks()
-        rollBack()
+        rollBackForLockedResource()
       }
-      script.lock('beta-and-prod-environments') {
+      withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
         deploy(envs.beta)
         waitForValidationIn(envs.beta)
         script.parallel(
@@ -87,7 +87,7 @@ class Deployer implements Serializable {
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
       }
-      script.lock('acceptance-environment') {
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(envs.acceptance)
       }
     }
@@ -217,34 +217,72 @@ class Deployer implements Serializable {
 
   private def withRollbackManagement(Closure body) {
     def rollbacks = []
-    def deploy = { env ->
-      rollbacks = [deployEnv(env)] + rollbacks
+    def rollBackAll = {
+      def rollBackByResource = rollbacks
+        .groupBy { it.lockedResource }
+        .collectEntries { lockedResource, rollbacksForResource ->
+          [(lockedResource): {
+            script.lock(lockedResource) {
+              executeRollbacks(rollbacksForResource)
+            }
+          }]
+        }
+      try {
+        script.parallel(rollBackByResource)
+      } finally {
+        rollbacks = []
+      }
     }
-    def rollBack = {
-      def exception
-      rollbacks.each {
+
+    def withLock = { String resource, Closure withLockBody ->
+      def deploy = { env ->
+        rollbacks = [[
+          lockedResource: resource,
+          closure: deployEnv(env)
+        ]] + rollbacks
+      }
+      def rollBackForLockedResource = {
+        def (toRollBack, toRetain) = rollbacks.split { it.lockedResource == resource }
         try {
-          it()
-        } catch(e) {
-          exception = e
-          script.echo("Rollback failed with ${e}!")
-          // Allow rest of the the rollbacks to also execute
+          executeRollbacks(toRollBack)
+        } finally {
+          rollbacks = toRetain
         }
       }
-      rollbacks = []
-      if (exception) {
-        // Re-throw the last exception, if there were any, to signal that the
-        // job (including the rollbacks) didn't execute successfully.
-        throw(exception)
+
+      script.lock(resource) {
+        try {
+          withLockBody(deploy, rollBackForLockedResource)
+        } catch(e) {
+          rollBackForLockedResource()
+          throw(e)
+        }
       }
     }
 
     try {
-      body(deploy, rollBack)
+      body(withLock)
     } catch(e) {
-      script.echo("Deploy either failed or was aborted. Rolling back changes in all affected environments.")
-      rollBack()
+      script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
+      rollBackAll()
       throw(e)
+    }
+  }
+
+  private def executeRollbacks(rollbacks) {
+    def exception
+    rollbacks.each {
+      try {
+        it.closure()
+      } catch(e) {
+        exception = e
+        script.echo("The following exception was thrown. Continuing regardless. ${e}!")
+      }
+    }
+    if (exception) {
+      // Re-throw the last exception, if there were any, once all rollbacks
+      // have been executed.
+      throw(exception)
     }
   }
 
