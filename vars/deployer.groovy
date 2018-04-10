@@ -103,7 +103,7 @@ def deployOnCommentTrigger(Map args) {
 
       // Associate commits with the sm-deployer GitHub user
       sh('git config user.name sm-deployer')
-      sh('git config user.email \'techmovers@salemove.com\'')
+      sh('git config user.email \'support@salemove.com\'')
 
       // And then push the merge commit to master, closing the PR
       sh('git push origin @:master')
