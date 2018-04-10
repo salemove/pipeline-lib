@@ -107,10 +107,6 @@ def deployOnCommentTrigger(Map args) {
       def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
       sh("git remote set-url origin ${sshOriginURL}")
 
-      // Associate commits with the sm-deployer GitHub user
-      sh('git config user.name sm-deployer')
-      sh('git config user.email \'support@salemove.com\'')
-
       // And then push the merge commit to master, closing the PR
       sh('git push origin @:master')
       // Clean up by deleting the now-merged branch
