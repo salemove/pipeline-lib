@@ -111,8 +111,9 @@ class Deployer implements Serializable {
   private def notifyDeploying(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
-      message: "Updating deployment/${kubernetesDeployment} to version ${version} in ${env.displayName}." +
-        " The current version is ${rollbackVersion}."
+      message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
+        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}." +
+        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
   private def notifyDeploySuccessful(env) {
