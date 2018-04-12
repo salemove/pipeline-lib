@@ -30,8 +30,19 @@ def wrapProperties(providedProperties = []) {
     )
   }
 
+  def isDeploy = Deployer.isDeploy(this)
+  if (isDeploy) {
+    // Stop all previous builds that are still in progress
+    while(currentBuild.rawBuild.getPreviousBuildInProgress() != null) {
+      echo("Stopping ${currentBuild.rawBuild.getPreviousBuildInProgress()?.getAbsoluteUrl()}")
+      currentBuild.rawBuild.getPreviousBuildInProgress()?.doStop()
+      // Give the job some time to finish before trying again
+      sleep(time: 10, unit: 'SECONDS')
+    }
+  }
+
   def tags = [
-    "is_deploy=${Deployer.isDeploy(this)}",
+    "is_deploy=${isDeploy}",
     // Remove PR number or branch name suffix from the job name
     "project=${JOB_NAME.replaceFirst(/\/[^\/]+$/, '')}"
   ]
