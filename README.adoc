@@ -117,7 +117,6 @@ The exact changes required depend on the project, but here's an example.
 +deployer.deployOnCommentTrigger(
 +  image: image,
 +  kubernetesDeployment: 'call-router',
-+  kubernetesContainer: 'call-router',
 +  inAcceptance: {
 +    runAcceptanceTests(
 +      driver: 'chrome',
