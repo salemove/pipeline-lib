@@ -109,7 +109,7 @@ class Deployer implements Serializable {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
-  private def notifyDeploying(env, rollbackVersion) {
+  private def notifyEnvDeploying(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
@@ -117,7 +117,7 @@ class Deployer implements Serializable {
         " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
-  private def notifyDeploySuccessful(env) {
+  private def notifyEnvDeploySuccessful(env) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
@@ -125,14 +125,14 @@ class Deployer implements Serializable {
         " in ${env.displayName}."
     )
   }
-  private def notifyRollingBack(env, rollbackVersion) {
+  private def notifyEnvRollingBack(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
         " in ${env.displayName}."
     )
   }
-  private def notifyRollbackFailed(env, rollbackVersion) {
+  private def notifyEnvRollbackFailed(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'danger',
@@ -158,7 +158,7 @@ class Deployer implements Serializable {
     def rollBack = {
       script.stage("Rolling back deployment in ${env.displayName}") {
         script.container(containerName) {
-          notifyRollingBack(env, rollbackVersion)
+          notifyEnvRollingBack(env, rollbackVersion)
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
@@ -166,7 +166,7 @@ class Deployer implements Serializable {
               }
             }
           } catch(e) {
-            notifyRollbackFailed(env, rollbackVersion)
+            notifyEnvRollbackFailed(env, rollbackVersion)
             throw(e)
           }
         }
@@ -176,7 +176,7 @@ class Deployer implements Serializable {
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
         rollbackVersion = getCurrentVersion(kubectlCmd)
-        notifyDeploying(env, rollbackVersion)
+        notifyEnvDeploying(env, rollbackVersion)
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -195,7 +195,7 @@ class Deployer implements Serializable {
           rollBack()
           throw(e)
         }
-        notifyDeploySuccessful(env)
+        notifyEnvDeploySuccessful(env)
       }
     }
 
