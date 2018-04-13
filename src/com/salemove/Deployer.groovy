@@ -40,7 +40,7 @@ class Deployer implements Serializable {
   private static final dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-  private def script, kubernetesDeployment, version, image, inAcceptance
+  private def script, kubernetesDeployment, image, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
@@ -74,26 +74,26 @@ class Deployer implements Serializable {
     try {
       checkPRMergeable()
       prepareReleaseTool()
-      pushDockerImage()
+      def version = pushDockerImage()
       withRollbackManagement { withLock ->
         withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(envs.acceptance)
+          deploy(envs.acceptance, version)
           runAcceptanceChecks()
           rollBackForLockedResource()
         }
         confirmNonAcceptanceDeploy()
         withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-          deploy(envs.beta)
+          deploy(envs.beta, version)
           waitForValidationIn(envs.beta)
           script.parallel(
-            US: { deploy(envs.prodUS) },
-            EU: { deploy(envs.prodEU) }
+            US: { deploy(envs.prodUS, version) },
+            EU: { deploy(envs.prodEU, version) }
           )
           waitForValidationIn(envs.prodUS)
           waitForValidationIn(envs.prodEU)
         }
         withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(envs.acceptance)
+          deploy(envs.acceptance, version)
         }
         mergeToMaster()
       }
@@ -118,7 +118,7 @@ class Deployer implements Serializable {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
-  private def notifyEnvDeploying(env, rollbackVersion) {
+  private def notifyEnvDeploying(env, version, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
@@ -126,7 +126,7 @@ class Deployer implements Serializable {
         " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
-  private def notifyEnvDeploySuccessful(env) {
+  private def notifyEnvDeploySuccessful(env, version) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
@@ -163,7 +163,7 @@ class Deployer implements Serializable {
     )
   }
 
-  private def deployEnv(env) {
+  private def deployEnv(env, version) {
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
       " --context=${env.kubeContext}" +
@@ -198,7 +198,7 @@ class Deployer implements Serializable {
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
         rollbackVersion = getCurrentVersion(kubectlCmd)
-        notifyEnvDeploying(env, rollbackVersion)
+        notifyEnvDeploying(env, version, rollbackVersion)
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -217,7 +217,7 @@ class Deployer implements Serializable {
           rollBack()
           throw(e)
         }
-        notifyEnvDeploySuccessful(env)
+        notifyEnvDeploySuccessful(env, version)
       }
     }
 
@@ -267,10 +267,10 @@ class Deployer implements Serializable {
     }
 
     def withLock = { String resource, Closure withLockBody ->
-      def deploy = { env ->
+      def deploy = { Map env, String version ->
         rollbacks = [[
           lockedResource: resource,
-          closure: deployEnv(env)
+          closure: deployEnv(env, version)
         ]] + rollbacks
       }
       def rollBackForLockedResource = {
@@ -387,11 +387,12 @@ class Deployer implements Serializable {
   }
 
   private def pushDockerImage() {
-    this.version = shEval('git log -n 1 --pretty=format:\'%h\'')
+    def version = shEval('git log -n 1 --pretty=format:\'%h\'')
 
     script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
     script.docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
       image.push(version)
     }
+    version
   }
 }
