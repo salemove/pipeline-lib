@@ -387,6 +387,16 @@ class Deployer implements Serializable {
   }
 
   private def pushDockerImage() {
+    // Change commit author if merge commit is created by Jenkins
+    def commitAuthor = shEval('git log -n 1 --pretty=format:\'%an\'')
+    if (commitAuthor == 'Jenkins') {
+      script.sh('git config user.name "sm-deployer"')
+      script.sh('git config user.email "support@salemove.com"')
+      script.sh('git commit --amend --no-edit --reset-author')
+    }
+
+    // Record version after possible author modification. This is the final
+    // version that will be merged to master later.
     def version = shEval('git log -n 1 --pretty=format:\'%h\'')
 
     script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
