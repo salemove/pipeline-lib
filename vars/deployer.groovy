@@ -92,37 +92,6 @@ def deployOnCommentTrigger(Map args) {
     new Deployer(this, args.subMap(['kubernetesDeployment', 'inAcceptance']) + [
       version: version
     ]).deploy()
-
-    // Mark the current job's status as success, for the PR to be
-    // mergeable.
-    pullRequest.createStatus(
-      status: 'success',
-      context: Deployer.buildStatusContext,
-      description: 'The PR has successfully been deployed',
-      targetUrl: BUILD_URL
-    )
-    // Mark a special deploy status as success, to indicate that the
-    // job has also been successfully deployed.
-    pullRequest.createStatus(
-      status: 'success',
-      context: Deployer.deployStatusContext,
-      description: 'The PR has successfully been deployed',
-      targetUrl: BUILD_URL
-    )
-
-    sshagent([deployerSSHAgent]) {
-      // Make sure the remote uses a SSH URL for the push to work. By
-      // default it's an HTTPS URL, which when used to push a commit,
-      // will require user input.
-      def httpsOriginURL = sh(returnStdout: true, script: 'git remote get-url origin').trim()
-      def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
-      sh("git remote set-url origin ${sshOriginURL}")
-
-      // And then push the merge commit to master, closing the PR
-      sh('git push origin @:master')
-      // Clean up by deleting the now-merged branch
-      sh("git push origin --delete ${pullRequest.headRef}")
-    }
   } catch(e) {
     pullRequest.createStatus(
       status: 'failure',

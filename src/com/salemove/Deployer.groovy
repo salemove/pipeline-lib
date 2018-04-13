@@ -90,6 +90,7 @@ class Deployer implements Serializable {
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(envs.acceptance)
       }
+      mergeToMaster()
     }
   }
 
@@ -307,6 +308,39 @@ class Deployer implements Serializable {
     ])
     script.container(containerName) {
       script.sh("cd ${releaseProjectSubdir} && bundle install")
+    }
+  }
+
+  private def mergeToMaster() {
+    // Mark the current job's status as success, for the PR to be
+    // mergeable.
+    script.pullRequest.createStatus(
+      status: 'success',
+      context: buildStatusContext,
+      description: 'The PR has successfully been deployed',
+      targetUrl: script.BUILD_URL
+    )
+    // Mark a special deploy status as success, to indicate that the
+    // job has also been successfully deployed.
+    script.pullRequest.createStatus(
+      status: 'success',
+      context: deployStatusContext,
+      description: 'The PR has successfully been deployed',
+      targetUrl: script.BUILD_URL
+    )
+
+    script.sshagent([deployerSSHAgent]) {
+      // Make sure the remote uses a SSH URL for the push to work. By
+      // default it's an HTTPS URL, which when used to push a commit,
+      // will require user input.
+      def httpsOriginURL = shEval('git remote get-url origin')
+      def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
+      script.sh("git remote set-url origin ${sshOriginURL}")
+
+      // And then push the merge commit to master, closing the PR
+      script.sh('git push origin @:master')
+      // Clean up by deleting the now-merged branch
+      script.sh("git push origin --delete ${script.pullRequest.headRef}")
     }
   }
 }
