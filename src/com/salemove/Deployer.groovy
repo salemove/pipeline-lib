@@ -9,27 +9,35 @@ class Deployer implements Serializable {
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
     acceptance: [
+      name: 'acceptance',
       displayName: 'acceptance',
       kubeEnvName: 'acceptance',
       kubeContext: '',
+      domainName: 'at.samo.io',
       slackChannel: '#ci'
     ],
     beta: [
+      name: 'beta',
       displayName: 'beta',
       kubeEnvName: 'staging',
       kubeContext: 'staging',
+      domainName: 'beta.salemove.com',
       slackChannel: '#beta'
     ],
     prodUS: [
+      name: 'prod-us',
       displayName: 'production US',
       kubeEnvName: 'production',
       kubeContext: 'prod-us',
+      domainName: 'salemove.com',
       slackChannel: '#production'
     ],
     prodEU: [
+      name: 'prod-eu',
       displayName: 'production EU',
       kubeEnvName: 'prod-eu',
       kubeContext: 'prod-eu',
+      domainName: 'salemove.eu',
       slackChannel: '#production'
     ]
   ]
@@ -40,12 +48,13 @@ class Deployer implements Serializable {
   private static final dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-  private def script, kubernetesDeployment, image, inAcceptance
+  private def script, kubernetesDeployment, image, inAcceptance, checklistFor
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
     this.image = args.image
     this.inAcceptance = args.inAcceptance
+    this.checklistFor = args.checklistFor
   }
 
   static def containers(script) {
@@ -227,7 +236,39 @@ class Deployer implements Serializable {
 
   private def waitForValidationIn(env) {
     script.stage("Validation in ${env.displayName}") {
-      script.input("Is the change OK in ${env.displayName}?")
+      def question = "Is the change OK in ${env.displayName}?"
+      if (!checklistFor) {
+        script.input(question)
+        return
+      }
+
+      def checklist = checklistFor(env.subMap(['name', 'domainName']))
+      if (checklist.empty) {
+        script.input(question)
+        return
+      }
+
+      def response = script.input(
+        message: "${question} Please fill the following checklist before continuing.",
+        parameters: checklist.collect { script.booleanParam(it + [defaultValue: false]) }
+      )
+
+      // input returns just the value if it has only one paramter, and a map of
+      // values otherwise. Create a list of names that have `false` values from
+      // that response.
+      def uncheckedResponses
+      if (checklist.size() == 1) {
+        uncheckedResponses = response ? [] : [checklist.first().name]
+      } else {
+        uncheckedResponses = response
+          .findAll { name, isChecked -> !isChecked }
+          .collect { name, isChecked -> name }
+      }
+      if (!uncheckedResponses.empty) {
+        def formattedUncheckedResponses = uncheckedResponses.join(', ')
+          .replaceFirst(/(.*), (.*?)$/, '$1, and $2') // Replace last comma with ", and"
+        script.input("You left ${formattedUncheckedResponses} unchecked. Are you sure you want to continue?")
+      }
     }
   }
 
