@@ -33,7 +33,7 @@ class Deployer implements Serializable {
       slackChannel: '#production'
     ]
   ]
-  private static final deploymentUpdateTimeout = [time: 5, unit: 'MINUTES']
+  private static final deploymentUpdateTimeout = [time: 10, unit: 'MINUTES']
   private static final releaseProjectSubdir = '__release'
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
