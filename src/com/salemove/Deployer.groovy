@@ -71,35 +71,30 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
-    try {
+    withRollbackManagement { withLock ->
       checkPRMergeable()
       prepareReleaseTool()
       def version = pushDockerImage()
-      withRollbackManagement { withLock ->
-        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(envs.acceptance, version)
-          runAcceptanceChecks()
-          rollBackForLockedResource()
-        }
-        confirmNonAcceptanceDeploy()
-        withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-          deploy(envs.beta, version)
-          waitForValidationIn(envs.beta)
-          script.parallel(
-            US: { deploy(envs.prodUS, version) },
-            EU: { deploy(envs.prodEU, version) }
-          )
-          waitForValidationIn(envs.prodUS)
-          waitForValidationIn(envs.prodEU)
-        }
-        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(envs.acceptance, version)
-        }
-        mergeToMaster()
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+        deploy(envs.acceptance, version)
+        runAcceptanceChecks()
+        rollBackForLockedResource()
       }
-    } catch(e) {
-      notifyDeployFailedOrAborted()
-      throw(e)
+      confirmNonAcceptanceDeploy()
+      withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+        deploy(envs.beta, version)
+        waitForValidationIn(envs.beta)
+        script.parallel(
+          US: { deploy(envs.prodUS, version) },
+          EU: { deploy(envs.prodEU, version) }
+        )
+        waitForValidationIn(envs.prodUS)
+        waitForValidationIn(envs.prodEU)
+      }
+      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+        deploy(envs.acceptance, version)
+      }
+      mergeToMaster()
     }
   }
 
@@ -297,6 +292,7 @@ class Deployer implements Serializable {
     } catch(e) {
       script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
       rollBackAll()
+      notifyDeployFailedOrAborted()
       throw(e)
     }
   }
