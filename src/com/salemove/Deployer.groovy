@@ -37,12 +37,14 @@ class Deployer implements Serializable {
   private static final releaseProjectSubdir = '__release'
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
+  private static final dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
+  private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-  private def script, kubernetesDeployment, version, inAcceptance
+  private def script, kubernetesDeployment, version, image, inAcceptance
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
-    this.version = args.version
+    this.image = args.image
     this.inAcceptance = args.inAcceptance
   }
 
@@ -69,28 +71,35 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
-    prepareReleaseTool()
-    withRollbackManagement { withLock ->
-      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(envs.acceptance)
-        runAcceptanceChecks()
-        rollBackForLockedResource()
+    try {
+      checkPRMergeable()
+      prepareReleaseTool()
+      pushDockerImage()
+      withRollbackManagement { withLock ->
+        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+          deploy(envs.acceptance)
+          runAcceptanceChecks()
+          rollBackForLockedResource()
+        }
+        confirmNonAcceptanceDeploy()
+        withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+          deploy(envs.beta)
+          waitForValidationIn(envs.beta)
+          script.parallel(
+            US: { deploy(envs.prodUS) },
+            EU: { deploy(envs.prodEU) }
+          )
+          waitForValidationIn(envs.prodUS)
+          waitForValidationIn(envs.prodEU)
+        }
+        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+          deploy(envs.acceptance)
+        }
+        mergeToMaster()
       }
-      confirmNonAcceptanceDeploy()
-      withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-        deploy(envs.beta)
-        waitForValidationIn(envs.beta)
-        script.parallel(
-          US: { deploy(envs.prodUS) },
-          EU: { deploy(envs.prodEU) }
-        )
-        waitForValidationIn(envs.prodUS)
-        waitForValidationIn(envs.prodEU)
-      }
-      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(envs.acceptance)
-      }
-      mergeToMaster()
+    } catch(e) {
+      notifyDeployFailedOrAborted()
+      throw(e)
     }
   }
 
@@ -138,6 +147,19 @@ class Deployer implements Serializable {
       color: 'danger',
       message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
         " in ${env.displayName}. Manual intervention is required!"
+    )
+  }
+
+  private def notifyDeployFailedOrAborted() {
+    script.pullRequest.createStatus(
+      status: 'failure',
+      context: deployStatusContext,
+      description: 'Deploy either failed or was aborted',
+      targetUrl: script.BUILD_URL
+    )
+    script.pullRequest.comment(
+      "Deploy failed or was aborted. @${deployingUser(script)}, " +
+      "please check [the logs](${script.BUILD_URL}/console) and try again."
     )
   }
 
@@ -341,6 +363,35 @@ class Deployer implements Serializable {
       script.sh('git push origin @:master')
       // Clean up by deleting the now-merged branch
       script.sh("git push origin --delete ${script.pullRequest.headRef}")
+    }
+  }
+
+  private def checkPRMergeable() {
+    def nonSuccessStatuses = script.pullRequest.statuses
+      // Ignore statuses that are managed by this build. They're expected to be
+      // 'pending' at this point.
+      .findAll { it.context != deployStatusContext && it.context != buildStatusContext }
+      // groupBy + collect to reduce multiple pending statuses + success status
+      // to a single success status. For non-success statuses, if there are
+      // many different states, use the last one.
+      .groupBy { it.context }
+      .collect { context, statuses ->
+        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
+      }
+      .findAll { it.state != 'success' }
+
+    if (!nonSuccessStatuses.empty) {
+      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
+      script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
+    }
+  }
+
+  private def pushDockerImage() {
+    this.version = shEval('git log -n 1 --pretty=format:\'%h\'')
+
+    script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
+    script.docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
+      image.push(version)
     }
   }
 }

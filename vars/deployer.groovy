@@ -1,10 +1,5 @@
 import static com.salemove.Collections.addWithoutDuplicates
 import com.salemove.Deployer
-import groovy.transform.Field
-
-@Field deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
-@Field dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
-@Field dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
 def wrapPodTemplate(Map args = [:]) {
   // For containers and volumes, add the lists together, but remove duplicates
@@ -62,47 +57,5 @@ def deployOnCommentTrigger(Map args) {
     return
   }
 
-  try {
-    def nonSuccessStatuses = pullRequest.statuses
-      // Ignore statuses that are managed by this build. They're expected to be
-      // 'pending' at this point.
-      .findAll { it.context != Deployer.deployStatusContext && it.context != Deployer.buildStatusContext }
-      // groupBy + collect to reduce multiple pending statuses + success status
-      // to a single success status. For non-success statuses, if there are
-      // many different states, use the last one.
-      .groupBy { it.context }
-      .collect { context, statuses ->
-        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
-      }
-      .findAll { it.state != 'success' }
-
-    if (!nonSuccessStatuses.empty) {
-      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
-      error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
-    }
-
-    def version = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
-
-    echo("Publishing docker image ${args.image.imageName()} with tag ${version}")
-    docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
-      args.image.push(version)
-    }
-
-    echo("Deploying the image")
-    new Deployer(this, args.subMap(['kubernetesDeployment', 'inAcceptance']) + [
-      version: version
-    ]).deploy()
-  } catch(e) {
-    pullRequest.createStatus(
-      status: 'failure',
-      context: Deployer.deployStatusContext,
-      description: 'Deploy either failed or was aborted',
-      targetUrl: BUILD_URL
-    )
-    pullRequest.comment(
-      "Deploy failed or was aborted. @${Deployer.deployingUser(this)}, " +
-      "please check [the logs](${BUILD_URL}/console) and try again."
-    )
-    throw(e)
-  }
+  new Deployer(this, args).deploy()
 }
