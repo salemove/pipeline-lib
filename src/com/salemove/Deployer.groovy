@@ -9,27 +9,35 @@ class Deployer implements Serializable {
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
     acceptance: [
+      name: 'acceptance',
       displayName: 'acceptance',
       kubeEnvName: 'acceptance',
       kubeContext: '',
+      domainName: 'at.samo.io',
       slackChannel: '#ci'
     ],
     beta: [
+      name: 'beta',
       displayName: 'beta',
       kubeEnvName: 'staging',
       kubeContext: 'staging',
+      domainName: 'beta.salemove.com',
       slackChannel: '#beta'
     ],
     prodUS: [
+      name: 'prod-us',
       displayName: 'production US',
       kubeEnvName: 'production',
       kubeContext: 'prod-us',
+      domainName: 'salemove.com',
       slackChannel: '#production'
     ],
     prodEU: [
+      name: 'prod-eu',
       displayName: 'production EU',
       kubeEnvName: 'prod-eu',
       kubeContext: 'prod-eu',
+      domainName: 'salemove.eu',
       slackChannel: '#production'
     ]
   ]
@@ -37,13 +45,16 @@ class Deployer implements Serializable {
   private static final releaseProjectSubdir = '__release'
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
+  private static final dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
+  private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-  private def script, kubernetesDeployment, version, inAcceptance
+  private def script, kubernetesDeployment, image, inAcceptance, checklistFor
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
-    this.version = args.version
+    this.image = args.image
     this.inAcceptance = args.inAcceptance
+    this.checklistFor = args.checklistFor
   }
 
   static def containers(script) {
@@ -69,27 +80,30 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
-    prepareReleaseTool()
     withRollbackManagement { withLock ->
+      checkPRMergeable()
+      prepareReleaseTool()
+      def version = pushDockerImage()
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(envs.acceptance)
+        deploy(envs.acceptance, version)
         runAcceptanceChecks()
         rollBackForLockedResource()
       }
       confirmNonAcceptanceDeploy()
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-        deploy(envs.beta)
+        deploy(envs.beta, version)
         waitForValidationIn(envs.beta)
         script.parallel(
-          US: { deploy(envs.prodUS) },
-          EU: { deploy(envs.prodEU) }
+          US: { deploy(envs.prodUS, version) },
+          EU: { deploy(envs.prodEU, version) }
         )
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
       }
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(envs.acceptance)
+        deploy(envs.acceptance, version)
       }
+      mergeToMaster()
     }
   }
 
@@ -108,7 +122,7 @@ class Deployer implements Serializable {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
-  private def notifyDeploying(env, rollbackVersion) {
+  private def notifyEnvDeploying(env, version, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
@@ -116,7 +130,7 @@ class Deployer implements Serializable {
         " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
-  private def notifyDeploySuccessful(env) {
+  private def notifyEnvDeploySuccessful(env, version) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'good',
@@ -124,14 +138,14 @@ class Deployer implements Serializable {
         " in ${env.displayName}."
     )
   }
-  private def notifyRollingBack(env, rollbackVersion) {
+  private def notifyEnvRollingBack(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
         " in ${env.displayName}."
     )
   }
-  private def notifyRollbackFailed(env, rollbackVersion) {
+  private def notifyEnvRollbackFailed(env, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
       color: 'danger',
@@ -140,7 +154,20 @@ class Deployer implements Serializable {
     )
   }
 
-  private def deployEnv(env) {
+  private def notifyDeployFailedOrAborted() {
+    script.pullRequest.createStatus(
+      status: 'failure',
+      context: deployStatusContext,
+      description: 'Deploy either failed or was aborted',
+      targetUrl: script.BUILD_URL
+    )
+    script.pullRequest.comment(
+      "Deploy failed or was aborted. @${deployingUser(script)}, " +
+      "please check [the logs](${script.BUILD_URL}/console) and try again."
+    )
+  }
+
+  private def deployEnv(env, version) {
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
       " --context=${env.kubeContext}" +
@@ -157,7 +184,7 @@ class Deployer implements Serializable {
     def rollBack = {
       script.stage("Rolling back deployment in ${env.displayName}") {
         script.container(containerName) {
-          notifyRollingBack(env, rollbackVersion)
+          notifyEnvRollingBack(env, rollbackVersion)
           try {
             script.timeout(deploymentUpdateTimeout) {
               script.sshagent([deployerSSHAgent]) {
@@ -165,7 +192,7 @@ class Deployer implements Serializable {
               }
             }
           } catch(e) {
-            notifyRollbackFailed(env, rollbackVersion)
+            notifyEnvRollbackFailed(env, rollbackVersion)
             throw(e)
           }
         }
@@ -175,7 +202,7 @@ class Deployer implements Serializable {
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
         rollbackVersion = getCurrentVersion(kubectlCmd)
-        notifyDeploying(env, rollbackVersion)
+        notifyEnvDeploying(env, version, rollbackVersion)
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -194,7 +221,7 @@ class Deployer implements Serializable {
           rollBack()
           throw(e)
         }
-        notifyDeploySuccessful(env)
+        notifyEnvDeploySuccessful(env, version)
       }
     }
 
@@ -209,7 +236,39 @@ class Deployer implements Serializable {
 
   private def waitForValidationIn(env) {
     script.stage("Validation in ${env.displayName}") {
-      script.input("Is the change OK in ${env.displayName}?")
+      def question = "Is the change OK in ${env.displayName}?"
+      if (!checklistFor) {
+        script.input(question)
+        return
+      }
+
+      def checklist = checklistFor(env.subMap(['name', 'domainName']))
+      if (checklist.empty) {
+        script.input(question)
+        return
+      }
+
+      def response = script.input(
+        message: "${question} Please fill the following checklist before continuing.",
+        parameters: checklist.collect { script.booleanParam(it + [defaultValue: false]) }
+      )
+
+      // input returns just the value if it has only one paramter, and a map of
+      // values otherwise. Create a list of names that have `false` values from
+      // that response.
+      def uncheckedResponses
+      if (checklist.size() == 1) {
+        uncheckedResponses = response ? [] : [checklist.first().name]
+      } else {
+        uncheckedResponses = response
+          .findAll { name, isChecked -> !isChecked }
+          .collect { name, isChecked -> name }
+      }
+      if (!uncheckedResponses.empty) {
+        def formattedUncheckedResponses = uncheckedResponses.join(', ')
+          .replaceFirst(/(.*), (.*?)$/, '$1, and $2') // Replace last comma with ", and"
+        script.input("You left ${formattedUncheckedResponses} unchecked. Are you sure you want to continue?")
+      }
     }
   }
 
@@ -244,10 +303,10 @@ class Deployer implements Serializable {
     }
 
     def withLock = { String resource, Closure withLockBody ->
-      def deploy = { env ->
+      def deploy = { Map env, String version ->
         rollbacks = [[
           lockedResource: resource,
-          closure: deployEnv(env)
+          closure: deployEnv(env, version)
         ]] + rollbacks
       }
       def rollBackForLockedResource = {
@@ -274,6 +333,7 @@ class Deployer implements Serializable {
     } catch(e) {
       script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
       rollBackAll()
+      notifyDeployFailedOrAborted()
       throw(e)
     }
   }
@@ -308,5 +368,78 @@ class Deployer implements Serializable {
     script.container(containerName) {
       script.sh("cd ${releaseProjectSubdir} && bundle install")
     }
+  }
+
+  private def mergeToMaster() {
+    // Mark the current job's status as success, for the PR to be
+    // mergeable.
+    script.pullRequest.createStatus(
+      status: 'success',
+      context: buildStatusContext,
+      description: 'The PR has successfully been deployed',
+      targetUrl: script.BUILD_URL
+    )
+    // Mark a special deploy status as success, to indicate that the
+    // job has also been successfully deployed.
+    script.pullRequest.createStatus(
+      status: 'success',
+      context: deployStatusContext,
+      description: 'The PR has successfully been deployed',
+      targetUrl: script.BUILD_URL
+    )
+
+    script.sshagent([deployerSSHAgent]) {
+      // Make sure the remote uses a SSH URL for the push to work. By
+      // default it's an HTTPS URL, which when used to push a commit,
+      // will require user input.
+      def httpsOriginURL = shEval('git remote get-url origin')
+      def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
+      script.sh("git remote set-url origin ${sshOriginURL}")
+
+      // And then push the merge commit to master, closing the PR
+      script.sh('git push origin @:master')
+      // Clean up by deleting the now-merged branch
+      script.sh("git push origin --delete ${script.pullRequest.headRef}")
+    }
+  }
+
+  private def checkPRMergeable() {
+    def nonSuccessStatuses = script.pullRequest.statuses
+      // Ignore statuses that are managed by this build. They're expected to be
+      // 'pending' at this point.
+      .findAll { it.context != deployStatusContext && it.context != buildStatusContext }
+      // groupBy + collect to reduce multiple pending statuses + success status
+      // to a single success status. For non-success statuses, if there are
+      // many different states, use the last one.
+      .groupBy { it.context }
+      .collect { context, statuses ->
+        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
+      }
+      .findAll { it.state != 'success' }
+
+    if (!nonSuccessStatuses.empty) {
+      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
+      script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
+    }
+  }
+
+  private def pushDockerImage() {
+    // Change commit author if merge commit is created by Jenkins
+    def commitAuthor = shEval('git log -n 1 --pretty=format:\'%an\'')
+    if (commitAuthor == 'Jenkins') {
+      script.sh('git config user.name "sm-deployer"')
+      script.sh('git config user.email "support@salemove.com"')
+      script.sh('git commit --amend --no-edit --reset-author')
+    }
+
+    // Record version after possible author modification. This is the final
+    // version that will be merged to master later.
+    def version = shEval('git log -n 1 --pretty=format:\'%h\'')
+
+    script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
+    script.docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
+      image.push(version)
+    }
+    version
   }
 }

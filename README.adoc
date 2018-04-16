@@ -125,6 +125,20 @@ The exact changes required depend on the project, but here's an example.
 +      slackChannel: '#tm-engage,
 +      parallelTestProcessors: 1
 +    )
++  },
++  checklistFor: { env ->
++    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" <4>
++    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + <5>
++      '(time:(from:now-30m,mode:quick,to:now))&_a=' +
++      '(query:(language:lucene,query:\'application:call_router+AND+level:error\'))'
++
++    [[
++      name: 'dashboard', <6>
++      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" <7>
++    ], [
++      name: 'logs',
++      description: "No new errors in <a href=\"${logURL}\">the project logs (${logURL})</a>"
++    ]]
 +  }
 +)
 
@@ -137,6 +151,14 @@ required. The symbol {link-using-libraries}[has to be unique] within the Jenkins
 <2> No need to push the image to anywhere. Just build it and pass to
 `deployOnCommentTrigger`, which tags and pushes as required.
 <3> The tests and the other checks run in acceptance obviously vary by project.
+<4> Use `env.name` to customize links for the specific environment. It's one
+of: `acceptance`, `beta`, `prod-us`, and `prod-eu`.
+<5> Use `env.domainName` to customize URLs. For example, it's
+`beta.salemove.com` in beta and `salemove.com` in prod US.
+<6> This should be a simple keyword.
+<7> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
+doesn't display links, while the old one does. This means that links have to
+also be included in plain text, for Blue Ocean UI users to see/access them.
 
 ==== Disabling merges for non-deployed PRs
 :link-call-router-settings: https://github.com/salemove/call-router/settings/branches/master
