@@ -335,7 +335,7 @@ can be enabled for that branch by specifying `mainBranch`. E.g.
 
 For non-branch builds, such as cronjobs or manually started jobs, the above
 status reporting strategy does not make sense. In these cases a simpler
-`onFailure` strategy can be used.
+`onFailure` or `always` strategy can be used.
 [source,groovy]
 ----
 properties([

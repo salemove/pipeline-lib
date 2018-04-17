@@ -36,6 +36,13 @@ def call(Map args = [:], Closure body) {
           slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
         }
         break
+      case 'always':
+        if (currentResult == 'SUCCESS') {
+          slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
+        } else {
+          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+        }
+        break
       default:
         error('Invalid strategy specified for withResultReporting')
         break
