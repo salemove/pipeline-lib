@@ -15,7 +15,7 @@ def call(Map args = [:], Closure body) {
     // currentBuild.result of null indicates success.
     def currentResult = currentBuild.result ?: 'SUCCESS'
 
-    def buildDescription = "${JOB_NAME} (<${BUILD_URL}|Open>)"
+    def buildDescription = "${JOB_NAME} (Open <${RUN_DISPLAY_URL}|Blue Ocean> or <${BUILD_URL}|Old UI>)"
 
     switch(finalArgs.strategy) {
       case 'onMainBranchChange':
