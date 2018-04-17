@@ -349,6 +349,25 @@ withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
 }
 ----
 
+By default `withResultReporting` only includes the build status
+(success/failure), the job name, and links to the build in the slack message.
+Additional project-specific information can be included via the `customMessage`
+argument.
+[source,groovy]
+----
+properties([
+  parameters([
+    string(name: 'buildParam', defaultValue: 'default', description: 'A parameter')
+  ])
+])
+
+withResultReporting(customMessage: "Build was started with: ${params.buildParam}") {
+  inPod {
+    // Do something
+  }
+}
+----
+
 == Developing
 
 Guard is used for providing a preview of the documentation. Run the following
