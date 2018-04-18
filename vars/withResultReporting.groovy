@@ -17,7 +17,7 @@ def call(Map args = [:], Closure body) {
 
     def buildDescription = "${JOB_NAME} (Open <${RUN_DISPLAY_URL}|Blue Ocean> or <${BUILD_URL}|Old UI>)"
     if (finalArgs.customMessage) {
-      buildDescription += "\\n${finalArgs.customMessage}"
+      buildDescription += "\n${finalArgs.customMessage}"
     }
 
     switch(finalArgs.strategy) {
