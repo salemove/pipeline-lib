@@ -335,7 +335,7 @@ can be enabled for that branch by specifying `mainBranch`. E.g.
 
 For non-branch builds, such as cronjobs or manually started jobs, the above
 status reporting strategy does not make sense. In these cases a simpler
-`onFailure` strategy can be used.
+`onFailure` or `always` strategy can be used.
 [source,groovy]
 ----
 properties([
@@ -343,6 +343,25 @@ properties([
 ])
 
 withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
+  inPod {
+    // Do something
+  }
+}
+----
+
+By default `withResultReporting` only includes the build status
+(success/failure), the job name, and links to the build in the slack message.
+Additional project-specific information can be included via the `customMessage`
+argument.
+[source,groovy]
+----
+properties([
+  parameters([
+    string(name: 'buildParam', defaultValue: 'default', description: 'A parameter')
+  ])
+])
+
+withResultReporting(customMessage: "Build was started with: ${params.buildParam}") {
   inPod {
     // Do something
   }
