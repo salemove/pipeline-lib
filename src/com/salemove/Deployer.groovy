@@ -100,8 +100,8 @@ class Deployer implements Serializable {
         )
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
-        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(envs.acceptance, version)
+        withLock('acceptance-environment') { deployWithATLock, _ ->
+          deployWithATLock(envs.acceptance, version)
         }
         mergeToMaster()
       }
