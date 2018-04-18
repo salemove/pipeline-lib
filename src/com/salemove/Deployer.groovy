@@ -178,7 +178,8 @@ class Deployer implements Serializable {
       " --context '${env.kubeContext}'" +
       ' --namespace default' +
       " --application ${kubernetesDeployment}" +
-      ' --no-release-managed'
+      ' --no-release-managed' +
+      ' --pod-node-selector role=application'
 
     def rollbackVersion
     def rollBack = {
