@@ -91,6 +91,7 @@ class Deployer implements Serializable {
       }
       confirmNonAcceptanceDeploy()
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+        checkMasterHasNotChanged()
         deploy(envs.beta, version)
         waitForValidationIn(envs.beta)
         script.parallel(
@@ -400,6 +401,22 @@ class Deployer implements Serializable {
       script.sh('git push origin @:master')
       // Clean up by deleting the now-merged branch
       script.sh("git push origin --delete ${script.pullRequest.headRef}")
+    }
+  }
+
+  private def checkMasterHasNotChanged() {
+    script.sshagent([deployerSSHAgent]) {
+      script.sh('git fetch origin master')
+    }
+    // This exits with non-zero exit code and fails the build if remote master
+    // is no longer fully included in the merge commit we're working with.
+    // Pushing master in this state would fail anyway, so this gives us an
+    // early exit in this case.
+    try {
+      script.sh('git merge-base --is-ancestor origin/master @')
+    } catch(e) {
+      echo('The master branch has changed between now and when the tests were run. Please start over.')
+      throw(e)
     }
   }
 
