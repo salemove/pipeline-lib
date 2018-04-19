@@ -390,14 +390,8 @@ class Deployer implements Serializable {
       targetUrl: script.BUILD_URL
     )
 
+    ensureGitUsesSSH()
     script.sshagent([deployerSSHAgent]) {
-      // Make sure the remote uses a SSH URL for the push to work. By
-      // default it's an HTTPS URL, which when used to push a commit,
-      // will require user input.
-      def httpsOriginURL = shEval('git remote get-url origin')
-      def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
-      script.sh("git remote set-url origin ${sshOriginURL}")
-
       // And then push the merge commit to master, closing the PR
       script.sh('git push origin @:master')
       // Clean up by deleting the now-merged branch
@@ -406,6 +400,7 @@ class Deployer implements Serializable {
   }
 
   private def checkMasterHasNotChanged() {
+    ensureGitUsesSSH()
     script.sshagent([deployerSSHAgent]) {
       script.sh('git fetch origin master')
     }
@@ -419,6 +414,14 @@ class Deployer implements Serializable {
       echo('The master branch has changed between now and when the tests were run. Please start over.')
       throw(e)
     }
+  }
+
+  // Make sure the remote uses a SSH URL. By default it's an HTTPS URL, which
+  // when used to fetch or  push a commit, will require user input.
+  private def ensureGitUsesSSH() {
+    def httpsOriginURL = shEval('git remote get-url origin')
+    def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
+    script.sh("git remote set-url origin ${sshOriginURL}")
   }
 
   private def checkPRMergeable() {
