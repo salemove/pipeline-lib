@@ -179,6 +179,7 @@ class Deployer implements Serializable {
       " --context '${env.kubeContext}'" +
       ' --namespace default' +
       " --application ${kubernetesDeployment}" +
+      " --repository ${getRepositoryName()}" +
       ' --no-release-managed' +
       ' --pod-node-selector role=application'
 
@@ -422,6 +423,10 @@ class Deployer implements Serializable {
     def httpsOriginURL = shEval('git remote get-url origin')
     def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
     script.sh("git remote set-url origin ${sshOriginURL}")
+  }
+
+  private def getRepositoryName() {
+    shEval('git remote get-url origin').replaceFirst(/^.*\/([^.]+)(\.git)?$/, '$1')
   }
 
   private def checkPRMergeable() {
