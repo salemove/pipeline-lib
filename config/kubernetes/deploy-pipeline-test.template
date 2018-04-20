@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: deploy-pipeline-test
+  labels:
+    app: deploy-pipeline-test
+    version: '{{APP_VERSION}}'
+    jenkins-build-deploy: {{BUILD_TAG}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deploy-pipeline-test
+  template:
+    metadata:
+      labels:
+        app: deploy-pipeline-test
+        version: '{{APP_VERSION}}'
+        jenkins-build-deploy: {{BUILD_TAG}}
+    spec:
+      containers:
+      - name: deploy-pipeline-test
+        resources:
+          requests:
+            memory: "4Mi"
+            cpu: "2m"
+          limits:
+            memory: "10Mi"
+            cpu: "2m"
+        image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/deploy-pipeline-test:{{APP_VERSION}}'
+        ports:
+        - name: server-port
+          containerPort: 80
+        env:
+        - name: TEMPLATE_VALUE
+          value: '{{TEST_VALUE}}'
+        readinessProbe:
+          httpGet:
+            path: /
+            port: server-port
+          initialDelaySeconds: 2
+          periodSeconds: 5
