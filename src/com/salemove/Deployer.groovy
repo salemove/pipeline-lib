@@ -412,7 +412,7 @@ class Deployer implements Serializable {
     try {
       script.sh('git merge-base --is-ancestor origin/master @')
     } catch(e) {
-      echo('The master branch has changed between now and when the tests were run. Please start over.')
+      script.echo('The master branch has changed between now and when the tests were run. Please start over.')
       throw(e)
     }
   }
