@@ -425,7 +425,7 @@ class Deployer implements Serializable {
     def exception
     rollbacks.each {
       try {
-        it.closure()
+        it['closure']()
       } catch(e) {
         exception = e
         script.echo("The following exception was thrown. Continuing regardless. ${e}!")
