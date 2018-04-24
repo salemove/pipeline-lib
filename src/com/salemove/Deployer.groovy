@@ -123,6 +123,24 @@ class Deployer implements Serializable {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
+  private def hasExistingDeployment(String kubectlCmd) {
+    try {
+      script.sh("${kubectlCmd} get deployment/${kubernetesDeployment}")
+      true
+    } catch(e) {
+      false
+    }
+  }
+
+  private def notifyEnvDeployingForFirstTime(env, version) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "${deployingUser(script)} is creating deployment/${kubernetesDeployment} with" +
+        " version ${version} in ${env.displayName}. This is the first deploy for this application." +
+        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
+    )
+  }
+
   private def notifyEnvDeploying(env, version, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
@@ -154,6 +172,20 @@ class Deployer implements Serializable {
         " in ${env.displayName}. Manual intervention is required!"
     )
   }
+  private def notifyEnvDeletingDeploy(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "Rolling back deployment/${kubernetesDeployment} by deleting it in ${env.displayName}."
+    )
+  }
+  private notifyEnvDeployDeletionFailed(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      color: 'danger',
+      message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
+        " in ${env.displayName}. Manual intervention is required!"
+    )
+  }
 
   private def notifyDeployFailedOrAborted() {
     script.pullRequest.createStatus(
@@ -165,6 +197,13 @@ class Deployer implements Serializable {
     script.pullRequest.comment(
       "Deploy failed or was aborted. @${deployingUser(script)}, " +
       "please check [the logs](${script.BUILD_URL}/console) and try again."
+    )
+  }
+
+  private def notifyInputRequired() {
+    script.pullRequest.comment(
+      "@${deployingUser(script)}, your input is required [here](${script.RUN_DISPLAY_URL}) " +
+      "(or [in the old UI](${script.BUILD_URL}/console))."
     )
   }
 
@@ -183,20 +222,39 @@ class Deployer implements Serializable {
       ' --no-release-managed' +
       ' --pod-node-selector role=application'
 
-    def rollbackVersion
-    def rollBack = {
-      script.stage("Rolling back deployment in ${env.displayName}") {
-        script.container(containerName) {
-          notifyEnvRollingBack(env, rollbackVersion)
-          try {
-            script.timeout(deploymentUpdateTimeout) {
-              script.sshagent([deployerSSHAgent]) {
-                script.sh("${deployCmd} --version ${rollbackVersion}")
+    def rollBack
+    def rollbackForVersion = { rollbackVersion ->
+      return {
+        script.stage("Rolling back deployment in ${env.displayName}") {
+          script.container(containerName) {
+            notifyEnvRollingBack(env, rollbackVersion)
+            try {
+              script.timeout(deploymentUpdateTimeout) {
+                script.sshagent([deployerSSHAgent]) {
+                  script.sh("${deployCmd} --version ${rollbackVersion}")
+                }
               }
+            } catch(e) {
+              notifyEnvRollbackFailed(env, rollbackVersion)
+              throw(e)
             }
-          } catch(e) {
-            notifyEnvRollbackFailed(env, rollbackVersion)
-            throw(e)
+          }
+        }
+      }
+    }
+    def rollbackForInitialDeploy = {
+      return {
+        script.stage("Deleting deployment in ${env.displayName}") {
+          script.container(containerName) {
+            notifyEnvDeletingDeploy(env)
+            try {
+              script.timeout(deploymentUpdateTimeout) {
+                script.sh("${kubectlCmd} delete deployment/${kubernetesDeployment}")
+              }
+            } catch(e) {
+              notifyEnvDeployDeletionFailed(env)
+              throw(e)
+            }
           }
         }
       }
@@ -204,8 +262,20 @@ class Deployer implements Serializable {
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
-        rollbackVersion = getCurrentVersion(kubectlCmd)
-        notifyEnvDeploying(env, version, rollbackVersion)
+        if (hasExistingDeployment(kubectlCmd)) {
+          def rollbackVersion = getCurrentVersion(kubectlCmd)
+          rollBack = rollbackForVersion(rollbackVersion)
+          notifyEnvDeploying(env, version, rollbackVersion)
+        } else {
+          if (env.name == 'acceptance') {
+            // User might not be watching the job logs at this stage. Notify them via GitHub.
+            notifyInputRequired()
+          }
+          // Ask user to confirm that the missing deployment is expected
+          confirmInitialDeploy(env)
+          rollBack = rollbackForInitialDeploy()
+          notifyEnvDeployingForFirstTime(env, version)
+        }
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -284,6 +354,16 @@ class Deployer implements Serializable {
       )
       script.input('The change was validated in acceptance. Continue with other environments?')
     }
+  }
+
+  private def confirmInitialDeploy(env) {
+    script.input(
+      "Failed to find an existing deployment in ${env.displayName}. This is expected if deploying an " +
+      "application for the first time, but indicates an issue otherwise. Proceeding means that in " +
+      'case of failure, the deploy is rolled back by deleting the Kubernetes Deployment. Services ' +
+      'and other resources are left as-is and are expected to be overwritten by future deploys or ' +
+      'removed manually. Do you want to continue?'
+    )
   }
 
   private def withRollbackManagement(Closure body) {
