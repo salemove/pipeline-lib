@@ -123,6 +123,24 @@ class Deployer implements Serializable {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
 
+  private def hasExistingDeployment(String kubectlCmd) {
+    try {
+      script.sh("${kubectlCmd} get deployment/${kubernetesDeployment}")
+      true
+    } catch(e) {
+      false
+    }
+  }
+
+  private def notifyEnvDeployingForFirstTime(env, version) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "${deployingUser(script)} is creating deployment/${kubernetesDeployment} with" +
+        " version ${version} in ${env.displayName}. This is the first deploy for this application." +
+        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
+    )
+  }
+
   private def notifyEnvDeploying(env, version, rollbackVersion) {
     script.slackSend(
       channel: env.slackChannel,
@@ -154,6 +172,20 @@ class Deployer implements Serializable {
         " in ${env.displayName}. Manual intervention is required!"
     )
   }
+  private def notifyEnvDeletingDeploy(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "Rolling back deployment/${kubernetesDeployment} by deleting it in ${env.displayName}."
+    )
+  }
+  private notifyEnvDeployDeletionFailed(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      color: 'danger',
+      message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
+        " in ${env.displayName}. Manual intervention is required!"
+    )
+  }
 
   private def notifyDeployFailedOrAborted() {
     script.pullRequest.createStatus(
@@ -168,6 +200,13 @@ class Deployer implements Serializable {
     )
   }
 
+  private def notifyInputRequired() {
+    script.pullRequest.comment(
+      "@${deployingUser(script)}, your input is required [here](${script.RUN_DISPLAY_URL}) " +
+      "(or [in the old UI](${script.BUILD_URL}/console))."
+    )
+  }
+
   private def deployEnv(env, version) {
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
@@ -179,23 +218,43 @@ class Deployer implements Serializable {
       " --context '${env.kubeContext}'" +
       ' --namespace default' +
       " --application ${kubernetesDeployment}" +
+      " --repository ${getRepositoryName()}" +
       ' --no-release-managed' +
       ' --pod-node-selector role=application'
 
-    def rollbackVersion
-    def rollBack = {
-      script.stage("Rolling back deployment in ${env.displayName}") {
-        script.container(containerName) {
-          notifyEnvRollingBack(env, rollbackVersion)
-          try {
-            script.timeout(deploymentUpdateTimeout) {
-              script.sshagent([deployerSSHAgent]) {
-                script.sh("${deployCmd} --version ${rollbackVersion}")
+    def rollBack
+    def rollbackForVersion = { rollbackVersion ->
+      return {
+        script.stage("Rolling back deployment in ${env.displayName}") {
+          script.container(containerName) {
+            notifyEnvRollingBack(env, rollbackVersion)
+            try {
+              script.timeout(deploymentUpdateTimeout) {
+                script.sshagent([deployerSSHAgent]) {
+                  script.sh("${deployCmd} --version ${rollbackVersion}")
+                }
               }
+            } catch(e) {
+              notifyEnvRollbackFailed(env, rollbackVersion)
+              throw(e)
             }
-          } catch(e) {
-            notifyEnvRollbackFailed(env, rollbackVersion)
-            throw(e)
+          }
+        }
+      }
+    }
+    def rollbackForInitialDeploy = {
+      return {
+        script.stage("Deleting deployment in ${env.displayName}") {
+          script.container(containerName) {
+            notifyEnvDeletingDeploy(env)
+            try {
+              script.timeout(deploymentUpdateTimeout) {
+                script.sh("${kubectlCmd} delete deployment/${kubernetesDeployment}")
+              }
+            } catch(e) {
+              notifyEnvDeployDeletionFailed(env)
+              throw(e)
+            }
           }
         }
       }
@@ -203,8 +262,20 @@ class Deployer implements Serializable {
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
-        rollbackVersion = getCurrentVersion(kubectlCmd)
-        notifyEnvDeploying(env, version, rollbackVersion)
+        if (hasExistingDeployment(kubectlCmd)) {
+          def rollbackVersion = getCurrentVersion(kubectlCmd)
+          rollBack = rollbackForVersion(rollbackVersion)
+          notifyEnvDeploying(env, version, rollbackVersion)
+        } else {
+          if (env.name == 'acceptance') {
+            // User might not be watching the job logs at this stage. Notify them via GitHub.
+            notifyInputRequired()
+          }
+          // Ask user to confirm that the missing deployment is expected
+          confirmInitialDeploy(env)
+          rollBack = rollbackForInitialDeploy()
+          notifyEnvDeployingForFirstTime(env, version)
+        }
         try {
           script.timeout(deploymentUpdateTimeout) {
             script.sshagent([deployerSSHAgent]) {
@@ -245,7 +316,7 @@ class Deployer implements Serializable {
       }
 
       def checklist = checklistFor(env.subMap(['name', 'domainName']))
-      if (checklist.empty) {
+      if (checklist.size() == 0) {
         script.input(question)
         return
       }
@@ -266,7 +337,7 @@ class Deployer implements Serializable {
           .findAll { name, isChecked -> !isChecked }
           .collect { name, isChecked -> name }
       }
-      if (!uncheckedResponses.empty) {
+      if (uncheckedResponses.size() > 0) {
         def formattedUncheckedResponses = uncheckedResponses.join(', ')
           .replaceFirst(/(.*), (.*?)$/, '$1, and $2') // Replace last comma with ", and"
         script.input("You left ${formattedUncheckedResponses} unchecked. Are you sure you want to continue?")
@@ -283,6 +354,16 @@ class Deployer implements Serializable {
       )
       script.input('The change was validated in acceptance. Continue with other environments?')
     }
+  }
+
+  private def confirmInitialDeploy(env) {
+    script.input(
+      "Failed to find an existing deployment in ${env.displayName}. This is expected if deploying an " +
+      "application for the first time, but indicates an issue otherwise. Proceeding means that in " +
+      'case of failure, the deploy is rolled back by deleting the Kubernetes Deployment. Services ' +
+      'and other resources are left as-is and are expected to be overwritten by future deploys or ' +
+      'removed manually. Do you want to continue?'
+    )
   }
 
   private def withRollbackManagement(Closure body) {
@@ -344,7 +425,7 @@ class Deployer implements Serializable {
     def exception
     rollbacks.each {
       try {
-        it.closure()
+        it['closure']()
       } catch(e) {
         exception = e
         script.echo("The following exception was thrown. Continuing regardless. ${e}!")
@@ -411,7 +492,7 @@ class Deployer implements Serializable {
     try {
       script.sh('git merge-base --is-ancestor origin/master @')
     } catch(e) {
-      echo('The master branch has changed between now and when the tests were run. Please start over.')
+      script.echo('The master branch has changed between now and when the tests were run. Please start over.')
       throw(e)
     }
   }
@@ -422,6 +503,10 @@ class Deployer implements Serializable {
     def httpsOriginURL = shEval('git remote get-url origin')
     def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
     script.sh("git remote set-url origin ${sshOriginURL}")
+  }
+
+  private def getRepositoryName() {
+    shEval('git remote get-url origin').replaceFirst(/^.*\/([^.]+)(\.git)?$/, '$1')
   }
 
   private def checkPRMergeable() {
@@ -438,7 +523,7 @@ class Deployer implements Serializable {
       }
       .findAll { it.state != 'success' }
 
-    if (!nonSuccessStatuses.empty) {
+    if (nonSuccessStatuses.size() > 0) {
       def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
       script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
     }
