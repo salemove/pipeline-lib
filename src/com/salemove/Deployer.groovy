@@ -246,7 +246,7 @@ class Deployer implements Serializable {
       }
 
       def checklist = checklistFor(env.subMap(['name', 'domainName']))
-      if (checklist.empty) {
+      if (checklist.size() == 0) {
         script.input(question)
         return
       }
@@ -267,7 +267,7 @@ class Deployer implements Serializable {
           .findAll { name, isChecked -> !isChecked }
           .collect { name, isChecked -> name }
       }
-      if (!uncheckedResponses.empty) {
+      if (uncheckedResponses.size() > 0) {
         def formattedUncheckedResponses = uncheckedResponses.join(', ')
           .replaceFirst(/(.*), (.*?)$/, '$1, and $2') // Replace last comma with ", and"
         script.input("You left ${formattedUncheckedResponses} unchecked. Are you sure you want to continue?")
@@ -443,7 +443,7 @@ class Deployer implements Serializable {
       }
       .findAll { it.state != 'success' }
 
-    if (!nonSuccessStatuses.empty) {
+    if (nonSuccessStatuses.size() > 0) {
       def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
       script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
     }
