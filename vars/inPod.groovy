@@ -13,9 +13,10 @@ def call(Map args = [:], Closure body) {
 
   def finalArgs = defaultArgs << args << [containers: finalContainers]
 
-  // Include hashcode, because otherwise some changes to the template might not
-  // get picked up
-  def podLabel = "${finalArgs.name}-${finalArgs.hashCode()}"
+  // Include a UUID to ensure that the label is unique for every build. This
+  // way Jenkins will not re-use the pods for multiple builds and any changes
+  // to the template will be guaranteed to to be picked up.
+  def podLabel = "${finalArgs.name}-${UUID.randomUUID()}"
 
   podTemplate(finalArgs << [
     name: podLabel,
