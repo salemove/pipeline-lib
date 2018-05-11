@@ -138,8 +138,19 @@ class Deployer implements Serializable {
     script.sh(cmd)
   }
 
+  // Try getting the version first from the pod template labels and fall back
+  // to the deployment labels. This makes sure the correct version is used when
+  // the deployment is manually rolled back with `kubectl rollout undo`.
   private def getCurrentVersion(String kubectlCmd) {
-    shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
+    def templateVersion = shEval(
+      "${kubectlCmd} get deployment/${kubernetesDeployment} " +
+      "-o 'jsonpath={.spec.template.metadata.labels.version}'"
+    )
+
+    templateVersion ?: shEval(
+      "${kubectlCmd} get deployment/${kubernetesDeployment} " +
+      "-o 'jsonpath={.metadata.labels.version}'"
+    )
   }
 
   private def hasExistingDeployment(String kubectlCmd) {
