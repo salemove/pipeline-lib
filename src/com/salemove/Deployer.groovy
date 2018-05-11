@@ -119,6 +119,25 @@ class Deployer implements Serializable {
     script.sh(returnStdout: true, script: secureCmd).trim()
   }
 
+  // `kubectl patch` isn't idempotent and fails when trying to delete a field
+  // that doesn't exist. This helper function allows running `kubectl patch`
+  // idempotently by inspecting it's output and only failing when the patch
+  // fails for a different reason.
+  private def kubePatch(String kubectlCmd, String resource, String patchCmd) {
+    def cmd = """\
+    #!/bin/bash
+    set +e
+
+    result=\$(${kubectlCmd} patch ${resource} --type=json -p='[${patchCmd}]')
+    code="\$?"
+    if [[ "\$code" != "0" && "\$result" == *" not patched" ]]; then
+      echo "\$result" 1>&2
+      exit "\$code"
+    fi
+    """
+    script.sh(cmd)
+  }
+
   private def getCurrentVersion(String kubectlCmd) {
     shEval("${kubectlCmd} get deployment/${kubernetesDeployment} -o 'jsonpath={.metadata.labels.version}'")
   }
@@ -290,6 +309,12 @@ class Deployer implements Serializable {
               script.timeout(deploymentUpdateTimeout) {
                 script.sh("${kubectlCmd} rollout undo deployment/${kubernetesDeployment}")
                 script.sh("${kubectlCmd} rollout status deployment/${kubernetesDeployment}")
+                script.sh("${kubectlCmd} label deployment/${kubernetesDeployment} version-")
+                kubePatch(
+                  kubectlCmd,
+                  "deployment/${kubernetesDeployment}",
+                  '{"op": "remove", "path": "/spec/template/metadata/labels/version"}'
+                )
               }
             } catch(e) {
               notifyEnvUndoFailed(env)
