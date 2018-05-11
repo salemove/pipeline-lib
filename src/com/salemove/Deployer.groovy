@@ -359,7 +359,7 @@ class Deployer implements Serializable {
   private def confirmInitialDeploy(env) {
     script.input(
       "Failed to find an existing deployment in ${env.displayName}. This is expected if deploying an " +
-      "application for the first time, but indicates an issue otherwise. Proceeding means that in " +
+      'application for the first time, but indicates an issue otherwise. Proceeding means that in ' +
       'case of failure, the deploy is rolled back by deleting the Kubernetes Deployment. Services ' +
       'and other resources are left as-is and are expected to be overwritten by future deploys or ' +
       'removed manually. Do you want to continue?'
