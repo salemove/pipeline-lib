@@ -140,6 +140,14 @@ class Deployer implements Serializable {
         " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
     )
   }
+  private def notifyEnvDeployingVersionedForFirstTime(env, version) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "${deployingUser(script)} is creating deployment/${kubernetesDeployment} with" +
+        " version ${version} in ${env.displayName}. This is the first versioned deploy for this application." +
+        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
+    )
+  }
 
   private def notifyEnvDeploying(env, version, rollbackVersion) {
     script.slackSend(
@@ -184,6 +192,20 @@ class Deployer implements Serializable {
       color: 'danger',
       message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
         " in ${env.displayName}. Manual intervention is required!"
+    )
+  }
+  private def notifyEnvUndoingDeploy(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      message: "Undoing update to deployment/${kubernetesDeployment} in ${env.displayName}."
+    )
+  }
+  private notifyEnvUndoFailed(env) {
+    script.slackSend(
+      channel: env.slackChannel,
+      color: 'danger',
+      message: "Failed to undo update to deployment/${kubernetesDeployment} in ${env.displayName}." +
+        ' Manual intervention is required!'
     )
   }
 
@@ -259,13 +281,42 @@ class Deployer implements Serializable {
         }
       }
     }
+    def rollbackWithUndo = {
+      return {
+        script.stage("Undoing deployment in ${env.displayName}") {
+          script.container(containerName) {
+            notifyEnvUndoingDeploy(env)
+            try {
+              script.timeout(deploymentUpdateTimeout) {
+                script.sh("${kubectlCmd} rollout undo deployment/${kubernetesDeployment}")
+                script.sh("${kubectlCmd} rollout status deployment/${kubernetesDeployment}")
+              }
+            } catch(e) {
+              notifyEnvUndoFailed(env)
+              throw(e)
+            }
+          }
+        }
+      }
+    }
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
         if (hasExistingDeployment(kubectlCmd)) {
           def rollbackVersion = getCurrentVersion(kubectlCmd)
-          rollBack = rollbackForVersion(rollbackVersion)
-          notifyEnvDeploying(env, version, rollbackVersion)
+          if (rollbackVersion) {
+            rollBack = rollbackForVersion(rollbackVersion)
+            notifyEnvDeploying(env, version, rollbackVersion)
+          } else {
+            if (env.name == 'acceptance') {
+              // User might not be watching the job logs at this stage. Notify them via GitHub.
+              notifyInputRequired()
+            }
+            // Ask user to confirm that the missing version is expected
+            confirmFirstVersionedDeploy(env)
+            rollBack = rollbackWithUndo()
+            notifyEnvDeployingVersionedForFirstTime(env, version)
+          }
         } else {
           if (env.name == 'acceptance') {
             // User might not be watching the job logs at this stage. Notify them via GitHub.
@@ -363,6 +414,16 @@ class Deployer implements Serializable {
       'case of failure, the deploy is rolled back by deleting the Kubernetes Deployment. Services ' +
       'and other resources are left as-is and are expected to be overwritten by future deploys or ' +
       'removed manually. Do you want to continue?'
+    )
+  }
+
+  private def confirmFirstVersionedDeploy(env) {
+    script.input(
+      "Failed to find a 'version' label in ${env.displayName}. This is expected if deploying an " +
+      'application whose deploys have previously been managed manually (e.g. from sm-configuration), ' +
+      'but indicates an issue otherwise. Proceeding means that in case of failure, the deploy is ' +
+      'rolled back with `kubectl rollout undo`. Services and other resources are left as-is and are ' +
+      'expected to be overwritten by future deploys or removed manually. Do you want to continue?'
     )
   }
 
