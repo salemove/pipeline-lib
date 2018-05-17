@@ -20,8 +20,10 @@ def actualResponse = { envName, domainName ->
   }
   response
 }
+def expectedBuildValue = { version -> version }
+def expectedTemplateValue = { version, envName -> "${envName}-${version}" }
 def expectedResponse = { version, envName ->
-  "BUILD_VALUE=${version}, TEMPLATE_VALUE=${envName}-${version}"
+  "BUILD_VALUE=${expectedBuildValue(version)}, TEMPLATE_VALUE=${expectedTemplateValue(version, envName)}"
 }
 
 properties(deployer.wrapProperties())
@@ -38,6 +40,8 @@ withResultReporting(slackChannel: '#tm-is') {
     deployer.deployOnCommentTrigger(
       image: image,
       kubernetesDeployment: projectName,
+      // inAcceptance is deprecated, but is left here to test backwards
+      // compatibility
       inAcceptance: {
         def response = actualResponse('acceptance', 'at.samo.io')
         def expectation = expectedResponse(version, 'acceptance')
@@ -46,11 +50,17 @@ withResultReporting(slackChannel: '#tm-is') {
           error("Expected response to be \"${expectation}\", but was \"${response}\"")
         }
       },
+      automaticChecksFor: { env ->
+        env['runInKube'](
+          command: './test.sh',
+          additionalArgs: "--env='BUILD_VALUE=${expectedBuildValue(version)}'" +
+            " --env='TEMPLATE_VALUE=${expectedTemplateValue(version, env.name)}'"
+        )
+      },
       checklistFor: { env ->
         [[
-          name: 'curl',
-          description: "curl response \"${actualResponse(env.name, env.domainName)}\"" +
-            " matches expected \"${expectedResponse(version, env.name)}\""
+          name: 'OK?',
+          description: "Are you feeling good about this change in ${env.name}? https://app.${env.domainName}"
         ]]
       }
     )

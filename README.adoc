@@ -117,24 +117,31 @@ The exact changes required depend on the project, but here's an example.
 +deployer.deployOnCommentTrigger(
 +  image: image,
 +  kubernetesDeployment: 'call-router',
-+  inAcceptance: {
-+    runAcceptanceTests(
-+      driver: 'chrome',
-+      visitorApp: 'v2',
-+      suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <3>
-+      slackChannel: '#tm-engage,
-+      parallelTestProcessors: 1
++  automaticChecksFor: { env ->
++    env['runInKube'](
++      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <3>
++      command: './run_smoke_tests.sh',
++      additionalArgs: '--env="FOO=bar" --port=12345' // <4>
 +    )
++    if (env.name == 'acceptance') {
++      runAcceptanceTests(
++        driver: 'chrome',
++        visitorApp: 'v2',
++        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <5>
++        slackChannel: '#tm-engage,
++        parallelTestProcessors: 1
++      )
++    }
 +  },
 +  checklistFor: { env ->
-+    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" <4>
-+    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + <5>
++    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <6>
++    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <7>
 +      '(time:(from:now-30m,mode:quick,to:now))&_a=' +
 +      '(query:(language:lucene,query:\'application:call_router+AND+level:error\'))'
 +
 +    [[
-+      name: 'dashboard', <6>
-+      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" <7>
++      name: 'dashboard', // <8>
++      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <9>
 +    ], [
 +      name: 'logs',
 +      description: "No new errors in <a href=\"${logURL}\">the project logs (${logURL})</a>"
@@ -150,13 +157,15 @@ underscore, then change the underscore to two underscores (`__`) or more, as
 required. The symbol {link-using-libraries}[has to be unique] within the Jenkinsfile.
 <2> No need to push the image to anywhere. Just build it and pass to
 `deployOnCommentTrigger`, which tags and pushes as required.
-<3> The tests and the other checks run in acceptance obviously vary by project.
-<4> Use `env.name` to customize links for the specific environment. It's one
+<3> The image defaults to the current version of the application image.
+<4> Additional arguments to `kubectl run`.
+<5> The tests and the other checks run in acceptance obviously vary by project.
+<6> Use `env.name` to customize links for the specific environment. It's one
 of: `acceptance`, `beta`, `prod-us`, and `prod-eu`.
-<5> Use `env.domainName` to customize URLs. For example, it's
+<7> Use `env.domainName` to customize URLs. For example, it's
 `beta.salemove.com` in beta and `salemove.com` in prod US.
-<6> This should be a simple keyword.
-<7> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
+<8> This should be a simple keyword.
+<9> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
 doesn't display links, while the old one does. This means that links have to
 also be included in plain text, for Blue Ocean UI users to see/access them.
 

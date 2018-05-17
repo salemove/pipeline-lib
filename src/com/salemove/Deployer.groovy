@@ -45,15 +45,16 @@ class Deployer implements Serializable {
   private static final releaseProjectSubdir = '__release'
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
-  private static final dockerRegistryURI = 'https://662491802882.dkr.ecr.us-east-1.amazonaws.com'
+  private static final dockerRegistryURI = '662491802882.dkr.ecr.us-east-1.amazonaws.com'
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
 
-  private def script, kubernetesDeployment, image, inAcceptance, checklistFor
+  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
     this.image = args.image
     this.inAcceptance = args.inAcceptance
+    this.automaticChecksFor = args.automaticChecksFor
     this.checklistFor = args.checklistFor
   }
 
@@ -374,6 +375,8 @@ class Deployer implements Serializable {
               )
             }
           }
+          notifyEnvDeploySuccessful(env, version)
+          runAutomaticChecks(kubectlCmd, env, version)
         } catch(e) {
           // Handle rollout timeout here, instead of forcing the caller to handle
           // it, because the caller would only get the rollback closure after
@@ -381,7 +384,6 @@ class Deployer implements Serializable {
           rollBack()
           throw(e)
         }
-        notifyEnvDeploySuccessful(env, version)
       }
     }
 
@@ -389,8 +391,40 @@ class Deployer implements Serializable {
   }
 
   private def runAcceptanceChecks() {
-    script.stage('Running smoke tests') {
+    if (!inAcceptance) {
+      return
+    }
+    script.echo('`inAcceptance` is deprecated. Please use `automaticChecksFor` instead.')
+
+    script.stage('Running acceptance tests') {
       inAcceptance()
+    }
+  }
+
+  private def runAutomaticChecks(kubectlCmd, env, version) {
+    if (!automaticChecksFor) {
+      script.echo('No automatic checks defined for this job. Not running automatic checks.')
+      return
+    }
+
+    script.stage("Running automatic checks in ${env.displayName}") {
+      automaticChecksFor(env.subMap(['name', 'domainName']) << [
+        runInKube: { Map args ->
+          def defaultArgs = [image: "${dockerRegistryURI}/${image.id.replaceFirst(/:.*$/, '')}:${version}"]
+          def finalArgs = defaultArgs << args
+
+          def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
+          script.sh(
+            "${kubectlCmd} run" +
+            " ${kubernetesDeployment}-checks-${uniqueShortID}" +
+            " --image='${finalArgs.image}'" +
+            ' --restart=Never' +
+            ' --tty --stdin' +
+            " ${finalArgs.additionalArgs}" +
+            " -- ${finalArgs.command}"
+          )
+        }
+      ])
     }
   }
 
@@ -640,7 +674,7 @@ class Deployer implements Serializable {
     def version = shEval('git log -n 1 --pretty=format:\'%h\'')
 
     script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
-    script.docker.withRegistry(dockerRegistryURI, dockerRegistryCredentialsID) {
+    script.docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
       image.push(version)
     }
     version
