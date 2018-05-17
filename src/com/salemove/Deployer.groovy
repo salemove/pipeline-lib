@@ -420,6 +420,7 @@ class Deployer implements Serializable {
             " --image='${finalArgs.image}'" +
             ' --restart=Never' +
             ' --tty --stdin' +
+            ' --rm' +
             " ${finalArgs.additionalArgs}" +
             " -- ${finalArgs.command}"
           )
