@@ -1,5 +1,6 @@
 import static com.salemove.Collections.addWithoutDuplicates
 import com.salemove.Deployer
+import com.salemove.deploy.Github
 
 def wrapPodTemplate(Map args = [:]) {
   // For containers and volumes, add the lists together, but remove duplicates
@@ -19,9 +20,9 @@ def wrapProperties(providedProperties = []) {
     // deploying.
     pullRequest.createStatus(
       status: 'pending',
-      context: Deployer.deployStatusContext,
+      context: Github.deployStatusContext,
       description: 'The PR shouldn\'t be merged before it\'s deployed.',
-      targetUrl: BUILD_URL
+      targetUrl: "${BUILD_URL}/console".toString()
     )
   }
 

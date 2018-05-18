@@ -1,11 +1,12 @@
-def Deployer
+def Deployer, Github
 node {
   checkout(scm)
   def version = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
   // Load library from currently checked out code. Also loads global vars
   // in addition to the Deployer class assigned here.
-  Deployer = library(identifier: "pipeline-lib@${version}", retriever: legacySCM(scm))
-    .com.salemove.Deployer
+  def salemove = library(identifier: "pipeline-lib@${version}", retriever: legacySCM(scm)).com.salemove
+  Deployer = salemove.Deployer
+  Github = salemove.deploy.Github
 }
 
 def projectName = 'deploy-pipeline-test'
@@ -70,7 +71,7 @@ withResultReporting(slackChannel: '#tm-is') {
     if (isPRBuild && !Deployer.isDeploy(this)) {
       pullRequest.createStatus(
         status: 'success',
-        context: Deployer.deployStatusContext,
+        context: Github.deployStatusContext,
         description: 'PRs in this project don\'t have to necessarily be deployed',
         targetUrl: BUILD_URL
       )

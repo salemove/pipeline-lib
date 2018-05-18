@@ -1,12 +1,11 @@
 package com.salemove
 
 import com.salemove.deploy.Git
+import com.salemove.deploy.Github
 import com.salemove.deploy.Notify
 
 class Deployer implements Serializable {
   public static final triggerPattern = '!deploy'
-  public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
-  public static final buildStatusContext = 'continuous-integration/jenkins/pr-merge'
 
   private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube'
@@ -52,7 +51,8 @@ class Deployer implements Serializable {
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
   private static final defaultNamespace = 'default'
 
-  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace, notify, git
+  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
+    checklistFor, kubernetesNamespace, notify, git, github
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
@@ -63,6 +63,7 @@ class Deployer implements Serializable {
     this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
     this.notify = new Notify(script, args)
     this.git = new Git(script)
+    this.github = new Github(script)
   }
 
   static def containers(script) {
@@ -89,7 +90,7 @@ class Deployer implements Serializable {
 
   def deploy() {
     withRollbackManagement { withLock ->
-      checkPRMergeable()
+      github.checkPRMergeable()
       prepareReleaseTool()
       def version = pushDockerImage()
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
@@ -168,15 +169,6 @@ class Deployer implements Serializable {
     } catch(e) {
       false
     }
-  }
-
-  private def setPRFailureStatus() {
-    script.pullRequest.createStatus(
-      status: 'failure',
-      context: deployStatusContext,
-      description: 'Deploy either failed or was aborted',
-      targetUrl: script.BUILD_URL
-    )
   }
 
   private def deployEnv(env, version) {
@@ -463,7 +455,7 @@ class Deployer implements Serializable {
     } catch(e) {
       script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
       rollBackAll()
-      setPRFailureStatus()
+      github.setStatus(status: 'failure', description: 'Deploy either failed or was aborted')
       notify.deployFailedOrAborted()
       throw(e)
     }
@@ -502,44 +494,10 @@ class Deployer implements Serializable {
   }
 
   private def mergeToMaster() {
-    // Mark the current job's status as success, for the PR to be
-    // mergeable.
-    script.pullRequest.createStatus(
-      status: 'success',
-      context: buildStatusContext,
-      description: 'The PR has successfully been deployed',
-      targetUrl: script.BUILD_URL
-    )
-    // Mark a special deploy status as success, to indicate that the
-    // job has also been successfully deployed.
-    script.pullRequest.createStatus(
-      status: 'success',
-      context: deployStatusContext,
-      description: 'The PR has successfully been deployed',
-      targetUrl: script.BUILD_URL
-    )
+    // Mark the current job's status as success, for the PR to be mergeable.
+    github.setStatus(status: 'success', description: 'The PR has successfully been deployed')
 
     git.finishMerge()
-  }
-
-  private def checkPRMergeable() {
-    def nonSuccessStatuses = script.pullRequest.statuses
-      // Ignore statuses that are managed by this build. They're expected to be
-      // 'pending' at this point.
-      .findAll { it.context != deployStatusContext && it.context != buildStatusContext }
-      // groupBy + collect to reduce multiple pending statuses + success status
-      // to a single success status. For non-success statuses, if there are
-      // many different states, use the last one.
-      .groupBy { it.context }
-      .collect { context, statuses ->
-        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
-      }
-      .findAll { it.state != 'success' }
-
-    if (nonSuccessStatuses.size() > 0) {
-      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
-      script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
-    }
   }
 
   private def pushDockerImage() {
