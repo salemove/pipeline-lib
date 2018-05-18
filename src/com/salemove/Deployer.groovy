@@ -1,5 +1,7 @@
 package com.salemove
 
+import com.salemove.deploy.Notify
+
 class Deployer implements Serializable {
   public static final triggerPattern = '!deploy'
   public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
@@ -49,7 +51,7 @@ class Deployer implements Serializable {
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
   private static final defaultNamespace = 'default'
 
-  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace
+  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace, notify
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
@@ -58,6 +60,7 @@ class Deployer implements Serializable {
     this.automaticChecksFor = args.automaticChecksFor
     this.checklistFor = args.checklistFor
     this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
+    this.notify = new Notify(script, args)
   }
 
   static def containers(script) {
@@ -165,100 +168,12 @@ class Deployer implements Serializable {
     }
   }
 
-  private def notifyEnvDeployingForFirstTime(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "${deployingUser(script)} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first deploy for this application." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
-  }
-  private def notifyEnvDeployingVersionedForFirstTime(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "${deployingUser(script)} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first versioned deploy for this application." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
-  }
-
-  private def notifyEnvDeploying(env, version, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "${deployingUser(script)} is updating deployment/${kubernetesDeployment} to" +
-        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
-  }
-  private def notifyEnvDeploySuccessful(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
-      color: 'good',
-      message: "Successfully updated deployment/${kubernetesDeployment} to version ${version}" +
-        " in ${env.displayName}."
-    )
-  }
-  private def notifyEnvRollingBack(env, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
-        " in ${env.displayName}."
-    )
-  }
-  private def notifyEnvRollbackFailed(env, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
-      color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
-        " in ${env.displayName}. Manual intervention is required!"
-    )
-  }
-  private def notifyEnvDeletingDeploy(env) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "Rolling back deployment/${kubernetesDeployment} by deleting it in ${env.displayName}."
-    )
-  }
-  private notifyEnvDeployDeletionFailed(env) {
-    script.slackSend(
-      channel: env.slackChannel,
-      color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
-        " in ${env.displayName}. Manual intervention is required!"
-    )
-  }
-  private def notifyEnvUndoingDeploy(env) {
-    script.slackSend(
-      channel: env.slackChannel,
-      message: "Undoing update to deployment/${kubernetesDeployment} in ${env.displayName}."
-    )
-  }
-  private notifyEnvUndoFailed(env) {
-    script.slackSend(
-      channel: env.slackChannel,
-      color: 'danger',
-      message: "Failed to undo update to deployment/${kubernetesDeployment} in ${env.displayName}." +
-        ' Manual intervention is required!'
-    )
-  }
-
-  private def notifyDeployFailedOrAborted() {
+  private def setPRFailureStatus() {
     script.pullRequest.createStatus(
       status: 'failure',
       context: deployStatusContext,
       description: 'Deploy either failed or was aborted',
       targetUrl: script.BUILD_URL
-    )
-    script.pullRequest.comment(
-      "Deploy failed or was aborted. @${deployingUser(script)}, " +
-      "please check [the logs](${script.BUILD_URL}/console) and try again."
-    )
-  }
-
-  private def notifyInputRequired() {
-    script.pullRequest.comment(
-      "@${deployingUser(script)}, your input is required [here](${script.RUN_DISPLAY_URL}) " +
-      "(or [in the old UI](${script.BUILD_URL}/console))."
     )
   }
 
@@ -282,7 +197,7 @@ class Deployer implements Serializable {
       return {
         script.stage("Rolling back deployment in ${env.displayName}") {
           script.container(containerName) {
-            notifyEnvRollingBack(env, rollbackVersion)
+            notify.envRollingBack(env, rollbackVersion)
             try {
               script.timeout(deploymentUpdateTimeout) {
                 script.sshagent([deployerSSHAgent]) {
@@ -290,7 +205,7 @@ class Deployer implements Serializable {
                 }
               }
             } catch(e) {
-              notifyEnvRollbackFailed(env, rollbackVersion)
+              notify.envRollbackFailed(env, rollbackVersion)
               throw(e)
             }
           }
@@ -301,13 +216,13 @@ class Deployer implements Serializable {
       return {
         script.stage("Deleting deployment in ${env.displayName}") {
           script.container(containerName) {
-            notifyEnvDeletingDeploy(env)
+            notify.envDeletingDeploy(env)
             try {
               script.timeout(deploymentUpdateTimeout) {
                 script.sh("${kubectlCmd} delete deployment/${kubernetesDeployment}")
               }
             } catch(e) {
-              notifyEnvDeployDeletionFailed(env)
+              notify.envDeployDeletionFailed(env)
               throw(e)
             }
           }
@@ -318,7 +233,7 @@ class Deployer implements Serializable {
       return {
         script.stage("Undoing deployment in ${env.displayName}") {
           script.container(containerName) {
-            notifyEnvUndoingDeploy(env)
+            notify.envUndoingDeploy(env)
             try {
               script.timeout(deploymentUpdateTimeout) {
                 script.sh("${kubectlCmd} rollout undo deployment/${kubernetesDeployment}")
@@ -331,7 +246,7 @@ class Deployer implements Serializable {
                 )
               }
             } catch(e) {
-              notifyEnvUndoFailed(env)
+              notify.envUndoFailed(env)
               throw(e)
             }
           }
@@ -345,26 +260,26 @@ class Deployer implements Serializable {
           def rollbackVersion = getCurrentVersion(kubectlCmd)
           if (rollbackVersion) {
             rollBack = rollbackForVersion(rollbackVersion)
-            notifyEnvDeploying(env, version, rollbackVersion)
+            notify.envDeploying(env, version, rollbackVersion)
           } else {
             if (env.name == 'acceptance') {
               // User might not be watching the job logs at this stage. Notify them via GitHub.
-              notifyInputRequired()
+              notify.inputRequired()
             }
             // Ask user to confirm that the missing version is expected
             confirmFirstVersionedDeploy(env)
             rollBack = rollbackWithUndo()
-            notifyEnvDeployingVersionedForFirstTime(env, version)
+            notify.envDeployingVersionedForFirstTime(env, version)
           }
         } else {
           if (env.name == 'acceptance') {
             // User might not be watching the job logs at this stage. Notify them via GitHub.
-            notifyInputRequired()
+            notify.inputRequired()
           }
           // Ask user to confirm that the missing deployment is expected
           confirmInitialDeploy(env)
           rollBack = rollbackForInitialDeploy()
-          notifyEnvDeployingForFirstTime(env, version)
+          notify.envDeployingForFirstTime(env, version)
         }
         try {
           script.timeout(deploymentUpdateTimeout) {
@@ -377,7 +292,7 @@ class Deployer implements Serializable {
               )
             }
           }
-          notifyEnvDeploySuccessful(env, version)
+          notify.envDeploySuccessful(env, version)
           runAutomaticChecks(kubectlCmd, env, version)
         } catch(e) {
           // Handle rollout timeout here, instead of forcing the caller to handle
@@ -471,11 +386,7 @@ class Deployer implements Serializable {
 
   private def confirmNonAcceptanceDeploy() {
     script.stage('Waiting for permission before deploying to non-acceptance environments') {
-      script.pullRequest.comment(
-        "@${deployingUser(script)}, the changes were validated in acceptance. Please click **Proceed** " +
-        "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console)) to " +
-        'continue the deployment.'
-      )
+      notify.inputRequiredPostAcceptanceValidation()
       script.input('The change was validated in acceptance. Continue with other environments?')
     }
   }
@@ -550,7 +461,8 @@ class Deployer implements Serializable {
     } catch(e) {
       script.echo('Deploy either failed or was aborted. Rolling back changes in all affected environments.')
       rollBackAll()
-      notifyDeployFailedOrAborted()
+      setPRFailureStatus()
+      notify.deployFailedOrAborted()
       throw(e)
     }
   }
