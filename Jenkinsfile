@@ -39,6 +39,7 @@ withResultReporting(slackChannel: '#tm-is') {
 
     deployer.deployOnCommentTrigger(
       image: image,
+      kubernetesNamespace: 'default',
       kubernetesDeployment: projectName,
       // inAcceptance is deprecated, but is left here to test backwards
       // compatibility

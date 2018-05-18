@@ -116,6 +116,7 @@ The exact changes required depend on the project, but here's an example.
 
 +deployer.deployOnCommentTrigger(
 +  image: image,
++  kubernetesNamespace: 'default', // Optional, will deploy to `default` namespace if not specified
 +  kubernetesDeployment: 'call-router',
 +  automaticChecksFor: { env ->
 +    env['runInKube'](
@@ -392,4 +393,3 @@ open README.html # <2>
 ----
 <1> This doesn't exit, so following commands have to be entered elsewhere
 <2> Opens the preview in browser. Manually refresh browser as necessary
-

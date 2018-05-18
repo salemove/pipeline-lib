@@ -47,8 +47,9 @@ class Deployer implements Serializable {
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
   private static final dockerRegistryURI = '662491802882.dkr.ecr.us-east-1.amazonaws.com'
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
+  private static final defaultNamespace = 'default'
 
-  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor
+  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
@@ -56,6 +57,7 @@ class Deployer implements Serializable {
     this.inAcceptance = args.inAcceptance
     this.automaticChecksFor = args.automaticChecksFor
     this.checklistFor = args.checklistFor
+    this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
   }
 
   static def containers(script) {
@@ -264,12 +266,12 @@ class Deployer implements Serializable {
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
       " --context=${env.kubeContext}" +
-      " --namespace=default"
+      " --namespace=${kubernetesNamespace}"
     def deployCmd = "${releaseProjectSubdir}/deploy_service.rb" +
       " --kubeconfig ${kubeConfFolderPath}/config" +
       " --environment ${env.kubeEnvName}" +
       " --context '${env.kubeContext}'" +
-      ' --namespace default' +
+      " --namespace ${kubernetesNamespace}" +
       " --application ${kubernetesDeployment}" +
       " --repository ${getRepositoryName()}" +
       ' --no-release-managed' +
