@@ -97,7 +97,8 @@ class Notify implements Serializable {
     script.slackSend([:] << args << [
       channel: env.slackChannel,
       message: "${args.message}" +
-        "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
+        "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>" +
+        "\nOpen in <${script.RUN_DISPLAY_URL}|Blue Ocean> or <${script.BUILD_URL}/console|Old UI>"
     ])
   }
 
