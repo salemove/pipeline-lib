@@ -73,21 +73,16 @@ class Notify implements Serializable {
 
   def deployFailedOrAborted() {
     script.pullRequest.comment(
-      "Deploy failed or was aborted. @${deployingUser()}, " +
-      "please check [the logs](${script.BUILD_URL}/console) and try again."
+      "Deploy failed or was aborted. @${deployingUser()}, please check the logs ${hereMDJobLink()}."
     )
   }
   def inputRequired() {
-    script.pullRequest.comment(
-      "@${deployingUser()}, your input is required [here](${script.RUN_DISPLAY_URL}) " +
-      "(or [in the old UI](${script.BUILD_URL}/console))."
-    )
+    script.pullRequest.comment("@${deployingUser()}, your input is required ${hereMDJobLink()}.")
   }
   def inputRequiredPostAcceptanceValidation() {
     script.pullRequest.comment(
-      "@${deployingUser()}, the changes were validated in acceptance. Please click **Proceed** " +
-      "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console)) to " +
-      'continue the deployment.'
+      "@${deployingUser()}, the changes were validated in acceptance. Please click **Proceed**" +
+      " ${hereMDJobLink()} to continue the deployment."
     )
   }
 
@@ -106,5 +101,10 @@ class Notify implements Serializable {
     script.currentBuild.rawBuild.getCause(
       org.jenkinsci.plugins.pipeline.github.trigger.IssueCommentCause
     ).userLogin
+  }
+
+  // A Markdown string for linking to the job in e.g. GitHub comments.
+  private def hereMDJobLink() {
+    "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console))"
   }
 }
