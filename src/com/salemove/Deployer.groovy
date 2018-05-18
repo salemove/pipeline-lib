@@ -1,5 +1,6 @@
 package com.salemove
 
+import com.salemove.deploy.Git
 import com.salemove.deploy.Notify
 
 class Deployer implements Serializable {
@@ -51,7 +52,7 @@ class Deployer implements Serializable {
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
   private static final defaultNamespace = 'default'
 
-  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace, notify
+  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor, checklistFor, kubernetesNamespace, notify, git
   Deployer(script, Map args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
@@ -61,6 +62,7 @@ class Deployer implements Serializable {
     this.checklistFor = args.checklistFor
     this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
     this.notify = new Notify(script, args)
+    this.git = new Git(script)
   }
 
   static def containers(script) {
@@ -97,7 +99,7 @@ class Deployer implements Serializable {
       }
       confirmNonAcceptanceDeploy()
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-        checkMasterHasNotChanged()
+        git.checkMasterHasNotChanged()
         deploy(envs.beta, version)
         waitForValidationIn(envs.beta)
         script.parallel(
@@ -188,7 +190,7 @@ class Deployer implements Serializable {
       " --context '${env.kubeContext}'" +
       " --namespace ${kubernetesNamespace}" +
       " --application ${kubernetesDeployment}" +
-      " --repository ${getRepositoryName()}" +
+      " --repository ${git.getRepositoryName()}" +
       ' --no-release-managed' +
       ' --pod-node-selector role=application'
 
@@ -517,42 +519,7 @@ class Deployer implements Serializable {
       targetUrl: script.BUILD_URL
     )
 
-    ensureGitUsesSSH()
-    script.sshagent([deployerSSHAgent]) {
-      // And then push the merge commit to master, closing the PR
-      script.sh('git push origin @:master')
-      // Clean up by deleting the now-merged branch
-      script.sh("git push origin --delete ${script.pullRequest.headRef}")
-    }
-  }
-
-  private def checkMasterHasNotChanged() {
-    ensureGitUsesSSH()
-    script.sshagent([deployerSSHAgent]) {
-      script.sh('git fetch origin master')
-    }
-    // This exits with non-zero exit code and fails the build if remote master
-    // is no longer fully included in the merge commit we're working with.
-    // Pushing master in this state would fail anyway, so this gives us an
-    // early exit in this case.
-    try {
-      script.sh('git merge-base --is-ancestor origin/master @')
-    } catch(e) {
-      script.echo('The master branch has changed between now and when the tests were run. Please start over.')
-      throw(e)
-    }
-  }
-
-  // Make sure the remote uses a SSH URL. By default it's an HTTPS URL, which
-  // when used to fetch or  push a commit, will require user input.
-  private def ensureGitUsesSSH() {
-    def httpsOriginURL = shEval('git remote get-url origin')
-    def sshOriginURL = httpsOriginURL.replaceFirst(/https:\/\/github.com\//, 'git@github.com:')
-    script.sh("git remote set-url origin ${sshOriginURL}")
-  }
-
-  private def getRepositoryName() {
-    shEval('git remote get-url origin').replaceFirst(/^.*\/([^.]+)(\.git)?$/, '$1')
+    git.finishMerge()
   }
 
   private def checkPRMergeable() {
@@ -576,17 +543,10 @@ class Deployer implements Serializable {
   }
 
   private def pushDockerImage() {
-    // Change commit author if merge commit is created by Jenkins
-    def commitAuthor = shEval('git log -n 1 --pretty=format:\'%an\'')
-    if (commitAuthor == 'Jenkins') {
-      script.sh('git config user.name "sm-deployer"')
-      script.sh('git config user.email "support@salemove.com"')
-      script.sh('git commit --amend --no-edit --reset-author')
-    }
-
+    git.resetMergeCommitAuthor()
     // Record version after possible author modification. This is the final
     // version that will be merged to master later.
-    def version = shEval('git log -n 1 --pretty=format:\'%h\'')
+    def version = git.getShortRevision()
 
     script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
     script.docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
