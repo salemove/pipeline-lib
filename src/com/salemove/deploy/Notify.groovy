@@ -8,80 +8,67 @@ class Notify implements Serializable {
   }
 
   def envDeployingForFirstTime(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "${deployingUser()} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first deploy for this application." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
+        " version ${version} in ${env.displayName}. This is the first deploy for this application."
+    ])
   }
   def envDeployingVersionedForFirstTime(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "${deployingUser()} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first versioned deploy for this application." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
+        " version ${version} in ${env.displayName}. This is the first versioned deploy for this application."
+    ])
   }
 
   def envDeploying(env, version, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "${deployingUser()} is updating deployment/${kubernetesDeployment} to" +
-        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}." +
-        " <${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
-    )
+        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}."
+    ])
   }
   def envDeploySuccessful(env, version) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       color: 'good',
       message: "Successfully updated deployment/${kubernetesDeployment} to version ${version}" +
         " in ${env.displayName}."
-    )
+    ])
   }
   def envRollingBack(env, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
         " in ${env.displayName}."
-    )
+    ])
   }
   def envRollbackFailed(env, rollbackVersion) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       color: 'danger',
       message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
         " in ${env.displayName}. Manual intervention is required!"
-    )
+    ])
   }
   def envDeletingDeploy(env) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "Rolling back deployment/${kubernetesDeployment} by deleting it in ${env.displayName}."
-    )
+    ])
   }
   def envDeployDeletionFailed(env) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       color: 'danger',
       message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
         " in ${env.displayName}. Manual intervention is required!"
-    )
+    ])
   }
   def envUndoingDeploy(env) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       message: "Undoing update to deployment/${kubernetesDeployment} in ${env.displayName}."
-    )
+    ])
   }
   def envUndoFailed(env) {
-    script.slackSend(
-      channel: env.slackChannel,
+    sendSlack(env, [
       color: 'danger',
       message: "Failed to undo update to deployment/${kubernetesDeployment} in ${env.displayName}." +
         ' Manual intervention is required!'
-    )
+    ])
   }
 
   def deployFailedOrAborted() {
@@ -102,6 +89,16 @@ class Notify implements Serializable {
       "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console)) to " +
       'continue the deployment.'
     )
+  }
+
+  private def sendSlack(env, Map args) {
+    // The << operator mutates the left-hand map. Start with an empty map ([:])
+    // to avoid mutating user-provided object.
+    script.slackSend([:] << args << [
+      channel: env.slackChannel,
+      message: "${args.message}" +
+        "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>"
+    ])
   }
 
   private def deployingUser() {
