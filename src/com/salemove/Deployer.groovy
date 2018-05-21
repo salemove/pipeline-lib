@@ -54,16 +54,21 @@ class Deployer implements Serializable {
   private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
     checklistFor, kubernetesNamespace, notify, git, github
   Deployer(script, Map args) {
+    def defaultArgs = [
+      kubernetesNamespace: 'default'
+    ]
+    def finalArgs = defaultArgs << args
+
     this.script = script
-    this.kubernetesDeployment = args.kubernetesDeployment
-    this.image = args.image
-    this.inAcceptance = args.inAcceptance
-    this.automaticChecksFor = args.automaticChecksFor
-    this.checklistFor = args.checklistFor
-    this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
-    this.notify = new Notify(script, args)
+    this.kubernetesDeployment = finalArgs.kubernetesDeployment
+    this.image = finalArgs.image
+    this.inAcceptance = finalArgs.inAcceptance
+    this.automaticChecksFor = finalArgs.automaticChecksFor
+    this.checklistFor = finalArgs.checklistFor
+    this.kubernetesNamespace = finalArgs.kubernetesNamespace
+    this.notify = new Notify(script, finalArgs)
     this.git = new Git(script)
-    this.github = new Github(script, args)
+    this.github = new Github(script, finalArgs)
   }
 
   static def containers(script) {
