@@ -1,5 +1,7 @@
 package com.salemove.deploy
 
+import static com.salemove.Collections.joinWithAnd
+
 class Github implements Serializable {
   public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
   public static final buildStatusContext = 'continuous-integration/jenkins/pr-merge'
@@ -23,6 +25,11 @@ class Github implements Serializable {
   }
 
   def checkPRMergeable() {
+    checkStatuses()
+    checkReviews()
+  }
+
+  private def checkStatuses() {
     def nonSuccessStatuses = script.pullRequest.statuses
       // Ignore statuses that are managed by this build. They're expected to be
       // 'pending' at this point.
@@ -38,7 +45,31 @@ class Github implements Serializable {
 
     if (nonSuccessStatuses.size() > 0) {
       def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
-      script.error("Commit is not ready to be merged. ${statusMessages.join(' ')}")
+      script.error("PR is not ready to be merged. ${statusMessages.join(' ')}")
+    }
+  }
+
+  private def checkReviews() {
+    def finalReviews = script.pullRequest.reviews
+      // Include DISMISSED reviews in the search, to ensure previous APPROVED
+      // or CHANGES_REQUESTED reviews by the same user are not counted in the
+      // checks below.
+      .findAll { ['CHANGES_REQUESTED', 'APPROVED', 'DISMISSED'].contains(it.state) }
+      // groupBy + collect to find the last review submitted by any specific
+      // user, as all reviews submitted by a user are included in the initial
+      // list.
+      .groupBy { it.user }
+      .collect { user, reviews -> reviews.max { it.id } }
+
+    def changesRequestedReviews = finalReviews.findAll { it.state == 'CHANGES_REQUESTED' }
+    def approvedReviews = finalReviews.findAll { it.state == 'APPROVED' }
+
+    if (changesRequestedReviews.size() > 0) {
+      def users = changesRequestedReviews.collect { it.user }
+      def plural = users.size() > 1
+      script.error("PR is not ready to be merged. User${plural ? 's' : ''} ${joinWithAnd(users)} ${plural ? 'have' : 'has'} requested changes.")
+    } else if (approvedReviews.size() < 1) {
+      script.error('PR is not ready to be merged. At least one approval required.')
     }
   }
 }
