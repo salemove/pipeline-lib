@@ -9,64 +9,64 @@ class Notify implements Serializable {
 
   def envDeployingForFirstTime(env, version) {
     sendSlack(env, [
-      message: "${deployingUser()} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first deploy for this application."
+      message: "${deployingUser()} is creating ${deployedResouce()} with version ${version}" +
+        " in ${env.displayName}. This is the first deploy for this application."
     ])
   }
   def envDeployingVersionedForFirstTime(env, version) {
     sendSlack(env, [
-      message: "${deployingUser()} is creating deployment/${kubernetesDeployment} with" +
-        " version ${version} in ${env.displayName}. This is the first versioned deploy for this application."
+      message: "${deployingUser()} is creating ${deployedResouce()} with version ${version}" +
+        " in ${env.displayName}. This is the first versioned deploy for this application."
     ])
   }
 
   def envDeploying(env, version, rollbackVersion) {
     sendSlack(env, [
-      message: "${deployingUser()} is updating deployment/${kubernetesDeployment} to" +
-        " version ${version} in ${env.displayName}. The current version is ${rollbackVersion}."
+      message: "${deployingUser()} is updating ${deployedResouce()} to version ${version}" +
+        " in ${env.displayName}. The current version is ${rollbackVersion}."
     ])
   }
   def envDeploySuccessful(env, version) {
     sendSlack(env, [
       color: 'good',
-      message: "Successfully updated deployment/${kubernetesDeployment} to version ${version}" +
+      message: "Successfully updated ${deployedResouce()} to version ${version}" +
         " in ${env.displayName}."
     ])
   }
   def envRollingBack(env, rollbackVersion) {
     sendSlack(env, [
-      message: "Rolling back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+      message: "Rolling back ${deployedResouce()} to version ${rollbackVersion}" +
         " in ${env.displayName}."
     ])
   }
   def envRollbackFailed(env, rollbackVersion) {
     sendSlack(env, [
       color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} to version ${rollbackVersion}" +
+      message: "Failed to roll back ${deployedResouce()} to version ${rollbackVersion}" +
         " in ${env.displayName}. Manual intervention is required!"
     ])
   }
   def envDeletingDeploy(env) {
     sendSlack(env, [
-      message: "Rolling back deployment/${kubernetesDeployment} by deleting it in ${env.displayName}."
+      message: "Rolling back ${deployedResouce()} by deleting it in ${env.displayName}."
     ])
   }
   def envDeployDeletionFailed(env) {
     sendSlack(env, [
       color: 'danger',
-      message: "Failed to roll back deployment/${kubernetesDeployment} by deleting it" +
+      message: "Failed to roll back ${deployedResouce()} by deleting it" +
         " in ${env.displayName}. Manual intervention is required!"
     ])
   }
   def envUndoingDeploy(env) {
     sendSlack(env, [
-      message: "Undoing update to deployment/${kubernetesDeployment} in ${env.displayName}."
+      message: "Undoing update to ${deployedResouce()} in ${env.displayName}."
     ])
   }
   def envUndoFailed(env) {
     sendSlack(env, [
       color: 'danger',
-      message: "Failed to undo update to deployment/${kubernetesDeployment} in ${env.displayName}." +
+      message: "Failed to undo update to ${deployedResouce()} in ${env.displayName}." +
         ' Manual intervention is required!'
     ])
   }
@@ -106,5 +106,9 @@ class Notify implements Serializable {
   // A Markdown string for linking to the job in e.g. GitHub comments.
   private def hereMDJobLink() {
     "[here](${script.RUN_DISPLAY_URL}) (or [in the old UI](${script.BUILD_URL}/console))"
+  }
+
+  private def deployedResouce() {
+    "deployment/${kubernetesDeployment}"
   }
 }
