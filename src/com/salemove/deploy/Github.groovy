@@ -25,11 +25,13 @@ class Github implements Serializable {
   }
 
   def checkPRMergeable() {
-    checkStatuses()
-    checkReviews()
+    def problems = getStatusProblems() + getReviewProblems()
+    if (problems.size() > 0) {
+      script.error("PR is not ready to be merged. ${problems.join(' ')}")
+    }
   }
 
-  private def checkStatuses() {
+  private def getStatusProblems() {
     def nonSuccessStatuses = script.pullRequest.statuses
       // Ignore statuses that are managed by this build. They're expected to be
       // 'pending' at this point.
@@ -43,13 +45,10 @@ class Github implements Serializable {
       }
       .findAll { it.state != 'success' }
 
-    if (nonSuccessStatuses.size() > 0) {
-      def statusMessages = nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
-      script.error("PR is not ready to be merged. ${statusMessages.join(' ')}")
-    }
+    nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
   }
 
-  private def checkReviews() {
+  private def getReviewProblems() {
     def finalReviews = script.pullRequest.reviews
       // Include DISMISSED reviews in the search, to ensure previous APPROVED
       // or CHANGES_REQUESTED reviews by the same user are not counted in the
@@ -64,12 +63,15 @@ class Github implements Serializable {
     def changesRequestedReviews = finalReviews.findAll { it.state == 'CHANGES_REQUESTED' }
     def approvedReviews = finalReviews.findAll { it.state == 'APPROVED' }
 
+    def problems = []
     if (changesRequestedReviews.size() > 0) {
       def users = changesRequestedReviews.collect { it.user }
       def plural = users.size() > 1
-      script.error("PR is not ready to be merged. User${plural ? 's' : ''} ${joinWithAnd(users)} ${plural ? 'have' : 'has'} requested changes.")
-    } else if (approvedReviews.size() < 1) {
-      script.error('PR is not ready to be merged. At least one approval required.')
+      problems << "User${plural ? 's' : ''} ${joinWithAnd(users)} ${plural ? 'have' : 'has'} requested changes."
     }
+    if (approvedReviews.size() < 1) {
+      problems << 'PR is not ready to be merged. At least one approval required.'
+    }
+    problems
   }
 }
