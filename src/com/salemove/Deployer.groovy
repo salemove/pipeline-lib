@@ -63,7 +63,7 @@ class Deployer implements Serializable {
     this.kubernetesNamespace = args.kubernetesNamespace ?: defaultNamespace
     this.notify = new Notify(script, args)
     this.git = new Git(script)
-    this.github = new Github(script)
+    this.github = new Github(script, args)
   }
 
   static def containers(script) {
@@ -90,7 +90,7 @@ class Deployer implements Serializable {
 
   def deploy() {
     withRollbackManagement { withLock ->
-      github.checkPRMergeable()
+      github.checkPRMergeable(notifyOnInput: true)
       prepareReleaseTool()
       def version = pushDockerImage()
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
@@ -101,6 +101,7 @@ class Deployer implements Serializable {
       confirmNonAcceptanceDeploy()
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
         git.checkMasterHasNotChanged()
+        github.checkPRMergeable(notifyOnInput: false)
         deploy(envs.beta, version)
         waitForValidationIn(envs.beta)
         script.parallel(

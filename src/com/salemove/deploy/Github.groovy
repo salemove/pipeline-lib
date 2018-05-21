@@ -6,9 +6,10 @@ class Github implements Serializable {
   public static final deployStatusContext = 'continuous-integration/jenkins/pr-merge/deploy'
   public static final buildStatusContext = 'continuous-integration/jenkins/pr-merge'
 
-  private def script
-  Github(script) {
+  private def script, notify
+  Github(script, Map args) {
     this.script = script
+    this.notify = new Notify(script, args)
   }
 
   def setStatus(Map args) {
@@ -24,10 +25,17 @@ class Github implements Serializable {
     ] << args)
   }
 
-  def checkPRMergeable() {
+  def checkPRMergeable(Map args) {
     def problems = getStatusProblems() + getReviewProblems()
     if (problems.size() > 0) {
-      script.error("PR is not ready to be merged. ${problems.join(' ')}")
+      script.echo("The PR is not ready to be merged! ${problems.join(' ')}")
+      if (args.notifyOnInput) {
+        notify.inputRequired()
+      }
+      script.input(
+        'Are you sure you want to continue? If these problems persist and merging to master fails,' +
+        ' then the changes will be rolled back in all environments, including production.'
+      )
     }
   }
 
