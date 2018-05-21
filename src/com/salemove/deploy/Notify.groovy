@@ -1,10 +1,11 @@
 package com.salemove.deploy
 
 class Notify implements Serializable {
-  private def script, kubernetesDeployment
+  private def script, kubernetesDeployment, kubernetesNamespace
   Notify(script, args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
+    this.kubernetesNamespace = args.kubernetesNamespace
   }
 
   def envDeployingForFirstTime(env, version) {
@@ -109,6 +110,7 @@ class Notify implements Serializable {
   }
 
   private def deployedResouce() {
-    "deployment/${kubernetesDeployment}"
+    "deployment/${kubernetesDeployment}" +
+      (kubernetesNamespace == 'default' ? '' : " in ${kubernetesNamespace} namespace")
   }
 }
