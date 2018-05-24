@@ -331,16 +331,18 @@ class Deployer implements Serializable {
           def finalArgs = defaultArgs << args
 
           def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
-          script.sh(
-            "${kubectlCmd} run" +
-            " ${kubernetesDeployment}-checks-${uniqueShortID}" +
-            " --image='${finalArgs.image}'" +
-            ' --restart=Never' +
-            ' --tty --stdin' +
-            ' --rm' +
-            " ${finalArgs.additionalArgs}" +
-            " -- ${finalArgs.command}"
-          )
+          script.ansiColor('xterm') {
+            script.sh(
+              "${kubectlCmd} run" +
+              " ${kubernetesDeployment}-checks-${uniqueShortID}" +
+              " --image='${finalArgs.image}'" +
+              ' --restart=Never' +
+              ' --tty --stdin' +
+              ' --rm' +
+              " ${finalArgs.additionalArgs}" +
+              " -- ${finalArgs.command}"
+            )
+          }
         }
       ])
     }
