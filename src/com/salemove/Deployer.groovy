@@ -116,7 +116,7 @@ class Deployer implements Serializable {
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
         withLock('acceptance-environment') { deployWithATLock, _ ->
-          deployWithATLock(env: envs.acceptance, version: version)
+          deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
         }
         mergeToMaster()
       }
@@ -178,8 +178,13 @@ class Deployer implements Serializable {
   }
 
   private def deployEnv(Map args) {
-    def env = args.env
-    def version = args.version
+    def defaultArgs = [
+      runAutomaticChecks: true
+    ]
+    def finalArgs = defaultArgs << args
+
+    def env = finalArgs.env
+    def version = finalArgs.version
 
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
@@ -296,7 +301,9 @@ class Deployer implements Serializable {
             }
           }
           notify.envDeploySuccessful(env, version)
-          runAutomaticChecks(kubectlCmd, env, version)
+          if (finalArgs.runAutomaticChecks) {
+            runAutomaticChecks(kubectlCmd, env, version)
+          }
         } catch(e) {
           // Handle rollout timeout here, instead of forcing the caller to handle
           // it, because the caller would only get the rollback closure after
