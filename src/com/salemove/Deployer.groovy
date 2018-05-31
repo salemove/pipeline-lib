@@ -99,7 +99,7 @@ class Deployer implements Serializable {
       prepareReleaseTool()
       def version = pushDockerImage()
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(envs.acceptance, version)
+        deploy(env: envs.acceptance, version: version)
         runAcceptanceChecks()
         rollBackForLockedResource()
       }
@@ -107,16 +107,16 @@ class Deployer implements Serializable {
       withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
         git.checkMasterHasNotChanged()
         github.checkPRMergeable(notifyOnInput: false)
-        deploy(envs.beta, version)
+        deploy(env: envs.beta, version: version)
         waitForValidationIn(envs.beta)
         script.parallel(
-          US: { deploy(envs.prodUS, version) },
-          EU: { deploy(envs.prodEU, version) }
+          US: { deploy(env: envs.prodUS, version: version) },
+          EU: { deploy(env: envs.prodEU, version: version) }
         )
         waitForValidationIn(envs.prodUS)
         waitForValidationIn(envs.prodEU)
         withLock('acceptance-environment') { deployWithATLock, _ ->
-          deployWithATLock(envs.acceptance, version)
+          deployWithATLock(env: envs.acceptance, version: version)
         }
         mergeToMaster()
       }
@@ -177,7 +177,10 @@ class Deployer implements Serializable {
     }
   }
 
-  private def deployEnv(env, version) {
+  private def deployEnv(Map args) {
+    def env = args.env
+    def version = args.version
+
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
       " --context=${env.kubeContext}" +
@@ -433,10 +436,10 @@ class Deployer implements Serializable {
     }
 
     def withLock = { String resource, Closure withLockBody ->
-      def deploy = { Map env, String version ->
+      def deploy = { Map args ->
         rollbacks = [[
           lockedResource: resource,
-          closure: deployEnv(env, version)
+          closure: deployEnv(args)
         ]] + rollbacks
       }
       def rollBackForLockedResource = {
