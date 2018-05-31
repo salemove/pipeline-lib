@@ -100,7 +100,6 @@ class Deployer implements Serializable {
       def version = pushDockerImage()
       withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
         deploy(env: envs.acceptance, version: version)
-        runAcceptanceChecks()
         rollBackForLockedResource()
       }
       confirmNonAcceptanceDeploy()
@@ -317,18 +316,18 @@ class Deployer implements Serializable {
     return rollBack
   }
 
-  private def runAcceptanceChecks() {
-    if (!inAcceptance) {
-      return
-    }
-    script.echo('`inAcceptance` is deprecated. Please use `automaticChecksFor` instead.')
-
-    script.stage('Running acceptance tests') {
-      inAcceptance()
-    }
-  }
-
   private def runAutomaticChecks(kubectlCmd, env, version) {
+    // Also run the deprecated `inAcceptance` closure if it's included and we
+    // just deployed to acceptance env. This functionality is kept for
+    // backwards compatibility only.
+    if (env.name == 'acceptance' && inAcceptance) {
+      script.echo('`inAcceptance` is deprecated. Please use `automaticChecksFor` instead.')
+
+      script.stage('Running acceptance tests') {
+        inAcceptance()
+      }
+    }
+
     if (!automaticChecksFor) {
       script.echo('No automatic checks defined for this job. Not running automatic checks.')
       return
