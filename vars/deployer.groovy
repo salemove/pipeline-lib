@@ -27,7 +27,16 @@ def wrapProperties(providedProperties = []) {
   }
 
   def isDeploy = Deployer.isDeploy(this)
+
+  def tags = [
+    "is_deploy=${isDeploy}",
+    // Remove PR number or branch name suffix from the job name
+    "project=${JOB_NAME.replaceFirst(/\/[^\/]+$/, '')}"
+  ]
+
   if (isDeploy) {
+    tags.add("github_user=${Deployer.deployingUser(this)}")
+
     // Stop all previous builds that are still in progress
     while(currentBuild.rawBuild.getPreviousBuildInProgress() != null) {
       echo("Stopping ${currentBuild.rawBuild.getPreviousBuildInProgress()?.getAbsoluteUrl()}")
@@ -36,12 +45,6 @@ def wrapProperties(providedProperties = []) {
       sleep(time: 10, unit: 'SECONDS')
     }
   }
-
-  def tags = [
-    "is_deploy=${isDeploy}",
-    // Remove PR number or branch name suffix from the job name
-    "project=${JOB_NAME.replaceFirst(/\/[^\/]+$/, '')}"
-  ]
 
   providedProperties + [
     pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
