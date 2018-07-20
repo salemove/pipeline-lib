@@ -9,7 +9,7 @@ class Deployer implements Serializable {
 
   private static final oldContainerName = 'deployer-container'
   private static final eksContainerName = 'deployer-container-eks'
-  private static final kubeConfFolderPath = '/root/.kube'
+  private static final kubeConfFolderPath = '/root/.kube_conf'
   private static final envs = [
     acceptance: [
       name: 'acceptance',
