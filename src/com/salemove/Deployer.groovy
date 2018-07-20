@@ -7,7 +7,8 @@ import com.salemove.deploy.Notify
 class Deployer implements Serializable {
   public static final triggerPattern = '!deploy'
 
-  private static final containerName = 'deployer-container'
+  private static final oldContainerName = 'deployer-container'
+  private static final eksContainerName = 'deployer-container-eks'
   private static final kubeConfFolderPath = '/root/.kube'
   private static final envs = [
     acceptance: [
@@ -72,7 +73,10 @@ class Deployer implements Serializable {
   }
 
   static def containers(script) {
-    [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:0f02bf5')]
+    [
+      script.interactiveContainer(name: oldContainerName, image: 'salemove/jenkins-toolbox:0f02bf5'),
+      script.interactiveContainer(name: eksContainerName, image: 'salemove/jenkins-toolbox:e38f8db')
+    ]
   }
   static def volumes(script) {
     [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
@@ -184,6 +188,7 @@ class Deployer implements Serializable {
 
     def env = finalArgs.env
     def version = finalArgs.version
+    def containerName = env.name == 'acceptance' ? eksContainerName : oldContainerName
 
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
@@ -505,7 +510,10 @@ class Deployer implements Serializable {
       ]],
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir]]
     ])
-    script.container(containerName) {
+    script.container(oldContainerName) {
+      script.sh("cd ${releaseProjectSubdir} && bundle install")
+    }
+    script.container(eksContainerName) {
       script.sh("cd ${releaseProjectSubdir} && bundle install")
     }
   }
