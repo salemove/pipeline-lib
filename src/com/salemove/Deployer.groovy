@@ -500,8 +500,8 @@ class Deployer implements Serializable {
       $class: 'GitSCM',
       branches: [[name: 'master']],
       userRemoteConfigs: [[
-        url: 'https://github.com/salemove/release.git',
-        credentialsId: script.scm.userRemoteConfigs.first().credentialsId
+        url: 'git@github.com:salemove/release.git',
+        credentialsId: deployerSSHAgent
       ]],
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir]]
     ])
