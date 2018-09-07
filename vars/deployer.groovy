@@ -8,7 +8,8 @@ def wrapPodTemplate(Map args = [:]) {
   // specified args.
   args + [
     containers: addWithoutDuplicates((args.containers ?: []), Deployer.containers(this)) { it.getArguments().name },
-    volumes: addWithoutDuplicates((args.volumes ?: []), Deployer.volumes(this)) { it.getArguments().mountPath }
+    volumes: addWithoutDuplicates((args.volumes ?: []), Deployer.volumes(this)) { it.getArguments().mountPath },
+    annotations: addWithoutDuplicates((args.annotations ?: []), Deployer.annotations(this)) { it.getArguments().key }
   ]
 }
 

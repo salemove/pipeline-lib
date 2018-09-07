@@ -77,6 +77,11 @@ class Deployer implements Serializable {
   static def volumes(script) {
     [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
   }
+  static def annotations(script) {
+    script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
+      [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
+    }
+  }
 
   static def isDeploy(script) {
     def triggerCause = getTriggerCause(script)
