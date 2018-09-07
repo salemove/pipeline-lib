@@ -39,11 +39,37 @@ class Git implements Serializable {
     shEval('git remote get-url origin').replaceFirst(/^.*\/([^.]+)(\.git)?$/, '$1')
   }
 
-  def getShortRevision() {
+  def withRemoteTag(Closure body) {
+    def version
+    try {
+      resetMergeCommitAuthor()
+      version = getShortRevision()
+      setVersionTag(version)
+      body(version)
+    } finally {
+      try {
+        removeVersionTag(version)
+      } catch(e) {
+        script.echo("Failed to remove version tag. ${e}!")
+      }
+    }
+  }
+
+  def checkoutVersionTag(String version) {
+    script.checkout(
+      $class: 'GitSCM',
+      branches: [[name: "refs/tags/${tagName(version)}"]],
+      doGenerateSubmoduleConfigurations: script.scm.doGenerateSubmoduleConfigurations,
+      extensions: script.scm.extensions,
+      userRemoteConfigs: script.scm.userRemoteConfigs
+    )
+  }
+
+  private def getShortRevision() {
     shEval('git log -n 1 --pretty=format:\'%h\'')
   }
 
-  def resetMergeCommitAuthor() {
+  private def resetMergeCommitAuthor() {
     // Change commit author if merge commit is created by Jenkins
     def commitAuthor = shEval('git log -n 1 --pretty=format:\'%an\'')
     if (commitAuthor == 'Jenkins') {
@@ -53,8 +79,23 @@ class Git implements Serializable {
     }
   }
 
-  def checkoutCurrentCommit() {
-    script.sh('git checkout @ -- .')
+  private def setVersionTag(String version) {
+    ensureGitUsesSSH()
+    script.sshagent([deployerSSHAgent]) {
+      script.sh("""
+        git tag ${tagName(version)}
+        git push origin ${tagName(version)}
+      """)
+    }
+  }
+  private def removeVersionTag(String version) {
+    ensureGitUsesSSH()
+    script.sshagent([deployerSSHAgent]) {
+      script.sh("git push --delete origin ${tagName(version)}")
+    }
+  }
+  private def tagName(version) {
+    "deploy_${version}"
   }
 
   // Make sure the remote uses a SSH URL. By default it's an HTTPS URL, which

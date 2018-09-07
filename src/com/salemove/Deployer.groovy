@@ -87,31 +87,33 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
-    inDeployerPod {
-      withRollbackManagement { withLock ->
-        github.checkPRMergeable(notifyOnInput: true)
-        prepareReleaseTool()
-        def version = pushDockerImage()
-        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-          deploy(env: envs.acceptance, version: version)
-          rollBackForLockedResource()
-        }
-        confirmNonAcceptanceDeploy()
-        withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-          git.checkMasterHasNotChanged()
-          github.checkPRMergeable(notifyOnInput: false)
-          deploy(env: envs.beta, version: version)
-          waitForValidationIn(envs.beta)
-          script.parallel(
-            US: { deploy(env: envs.prodUS, version: version) },
-            EU: { deploy(env: envs.prodEU, version: version) }
-          )
-          waitForValidationIn(envs.prodUS)
-          waitForValidationIn(envs.prodEU)
-          withLock('acceptance-environment') { deployWithATLock, _ ->
-            deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
+    git.withRemoteTag { version ->
+      inDeployerPod(version) {
+        withRollbackManagement { withLock ->
+          github.checkPRMergeable(notifyOnInput: true)
+          prepareReleaseTool()
+          pushDockerImage(version)
+          withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+            deploy(env: envs.acceptance, version: version)
+            rollBackForLockedResource()
           }
-          mergeToMaster()
+          confirmNonAcceptanceDeploy()
+          withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+            git.checkMasterHasNotChanged()
+            github.checkPRMergeable(notifyOnInput: false)
+            deploy(env: envs.beta, version: version)
+            waitForValidationIn(envs.beta)
+            script.parallel(
+              US: { deploy(env: envs.prodUS, version: version) },
+              EU: { deploy(env: envs.prodEU, version: version) }
+            )
+            waitForValidationIn(envs.prodUS)
+            waitForValidationIn(envs.prodEU)
+            withLock('acceptance-environment') { deployWithATLock, _ ->
+              deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
+            }
+            mergeToMaster()
+          }
         }
       }
     }
@@ -417,12 +419,7 @@ class Deployer implements Serializable {
     )
   }
 
-  private def inDeployerPod(Closure body) {
-    // The merge commit automatically created at the start of the build with
-    // checkout(scm) will not be available in the nested pod. Stash the entire
-    // git repository to make it available in the nested pod.
-    script.dir('.git') { script.stash(name: 'git', useDefaultExcludes: false) }
-
+  private def inDeployerPod(String version, Closure body) {
     script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
       script.inDockerAgent(
         name: 'deployer',
@@ -430,10 +427,7 @@ class Deployer implements Serializable {
         volumes: [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
       ) {
-        // Restore the merge commit and the working directory.
-        script.dir('.git') { script.unstash('git') }
-        git.checkoutCurrentCommit()
-
+        git.checkoutVersionTag(version)
         body()
       }
     }
@@ -534,16 +528,10 @@ class Deployer implements Serializable {
     git.finishMerge()
   }
 
-  private def pushDockerImage() {
-    git.resetMergeCommitAuthor()
-    // Record version after possible author modification. This is the final
-    // version that will be merged to master later.
-    def version = git.getShortRevision()
-
+  private def pushDockerImage(String version) {
     script.echo("Publishing docker image ${image.imageName()} with tag ${version}")
     script.docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
       image.push(version)
     }
-    version
   }
 }
