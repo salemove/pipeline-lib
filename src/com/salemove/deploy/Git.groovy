@@ -53,6 +53,10 @@ class Git implements Serializable {
     }
   }
 
+  def checkoutCurrentCommit() {
+    script.sh('git checkout @ -- .')
+  }
+
   // Make sure the remote uses a SSH URL. By default it's an HTTPS URL, which
   // when used to fetch or  push a commit, will require user input.
   private def ensureGitUsesSSH() {

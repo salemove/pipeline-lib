@@ -3,14 +3,8 @@ import com.salemove.Deployer
 import com.salemove.deploy.Github
 
 def wrapPodTemplate(Map args = [:]) {
-  // For containers and volumes, add the lists together, but remove duplicates
-  // by name and mountPath respectively, giving precedence to the user
-  // specified args.
-  args + [
-    containers: addWithoutDuplicates((args.containers ?: []), Deployer.containers(this)) { it.getArguments().name },
-    volumes: addWithoutDuplicates((args.volumes ?: []), Deployer.volumes(this)) { it.getArguments().mountPath },
-    annotations: addWithoutDuplicates((args.annotations ?: []), Deployer.annotations(this)) { it.getArguments().key }
-  ]
+  // Left for backwards compatibility
+  args
 }
 
 def wrapProperties(providedProperties = []) {

@@ -46,8 +46,6 @@ steps:
 . Upgrade the project's Jenkinsfile to:
 .. Include this library with `@Library('pipeline-lib') _`
 .. Configure the job's properties
-.. Wrap the arguments of `podTemplate`, <<code-inpod-code>>, or other with
-`deployer.wrapPodTemplate`
 .. Call `deployer.deployOnCommentTrigger` after the code has been tested and
 a Docker image built
 . Remove the project from all current release files footnote:[See e.g.
@@ -92,17 +90,6 @@ Or wrap an existing `properties` call with the provided wrapper:
    ])
 -])
 +]))
-----
-
-==== Wrapping the pod template
-
-Here's an example.
-[source,diff]
-----
--inDockerAgent(containers: [imageScanner.container()]) {
-+inDockerAgent(deployer.wrapPodTemplate(containers: [imageScanner.container()])) {
-   // ...
- }
 ----
 
 ==== Enabling deploy on comment trigger

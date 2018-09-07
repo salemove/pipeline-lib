@@ -71,18 +71,6 @@ class Deployer implements Serializable {
     this.github = new Github(script, finalArgs)
   }
 
-  static def containers(script) {
-    [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:e38f8db')]
-  }
-  static def volumes(script) {
-    [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')]
-  }
-  static def annotations(script) {
-    script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
-      [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
-    }
-  }
-
   static def isDeploy(script) {
     def triggerCause = getTriggerCause(script)
     triggerCause && triggerCause.triggerPattern == triggerPattern
@@ -99,30 +87,32 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
-    withRollbackManagement { withLock ->
-      github.checkPRMergeable(notifyOnInput: true)
-      prepareReleaseTool()
-      def version = pushDockerImage()
-      withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
-        deploy(env: envs.acceptance, version: version)
-        rollBackForLockedResource()
-      }
-      confirmNonAcceptanceDeploy()
-      withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
-        git.checkMasterHasNotChanged()
-        github.checkPRMergeable(notifyOnInput: false)
-        deploy(env: envs.beta, version: version)
-        waitForValidationIn(envs.beta)
-        script.parallel(
-          US: { deploy(env: envs.prodUS, version: version) },
-          EU: { deploy(env: envs.prodEU, version: version) }
-        )
-        waitForValidationIn(envs.prodUS)
-        waitForValidationIn(envs.prodEU)
-        withLock('acceptance-environment') { deployWithATLock, _ ->
-          deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
+    inDeployerPod {
+      withRollbackManagement { withLock ->
+        github.checkPRMergeable(notifyOnInput: true)
+        prepareReleaseTool()
+        def version = pushDockerImage()
+        withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+          deploy(env: envs.acceptance, version: version)
+          rollBackForLockedResource()
         }
-        mergeToMaster()
+        confirmNonAcceptanceDeploy()
+        withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+          git.checkMasterHasNotChanged()
+          github.checkPRMergeable(notifyOnInput: false)
+          deploy(env: envs.beta, version: version)
+          waitForValidationIn(envs.beta)
+          script.parallel(
+            US: { deploy(env: envs.prodUS, version: version) },
+            EU: { deploy(env: envs.prodEU, version: version) }
+          )
+          waitForValidationIn(envs.prodUS)
+          waitForValidationIn(envs.prodEU)
+          withLock('acceptance-environment') { deployWithATLock, _ ->
+            deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
+          }
+          mergeToMaster()
+        }
       }
     }
   }
@@ -425,6 +415,28 @@ class Deployer implements Serializable {
       'rolled back with `kubectl rollout undo`. Services and other resources are left as-is and are ' +
       'expected to be overwritten by future deploys or removed manually. Do you want to continue?'
     )
+  }
+
+  private def inDeployerPod(Closure body) {
+    // The merge commit automatically created at the start of the build with
+    // checkout(scm) will not be available in the nested pod. Stash the entire
+    // git repository to make it available in the nested pod.
+    script.dir('.git') { script.stash(name: 'git', useDefaultExcludes: false) }
+
+    script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
+      script.inDockerAgent(
+        name: 'deployer',
+        containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:e38f8db')],
+        volumes: [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')],
+        annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
+      ) {
+        // Restore the merge commit and the working directory.
+        script.dir('.git') { script.unstash('git') }
+        git.checkoutCurrentCommit()
+
+        body()
+      }
+    }
   }
 
   private def withRollbackManagement(Closure body) {
