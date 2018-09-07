@@ -346,7 +346,7 @@ class Deployer implements Serializable {
               " ${kubernetesDeployment}-checks-${uniqueShortID}" +
               " --image='${finalArgs.image}'" +
               ' --restart=Never' +
-              ' --tty --stdin' +
+              ' --attach' +
               ' --rm' +
               " ${finalArgs.additionalArgs}" +
               " -- ${finalArgs.command}"
