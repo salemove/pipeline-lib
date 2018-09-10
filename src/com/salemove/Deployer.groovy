@@ -89,9 +89,9 @@ class Deployer implements Serializable {
   def deploy() {
     github.checkPRMergeable(notifyOnInput: true)
     git.withRemoteTag { version ->
+      pushDockerImage(version)
       inDeployerPod(version) {
         prepareReleaseTool()
-        pushDockerImage(version)
         withRollbackManagement { withLock ->
           withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
             deploy(env: envs.acceptance, version: version)
