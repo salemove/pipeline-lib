@@ -56,13 +56,14 @@ class Git implements Serializable {
   }
 
   def checkoutVersionTag(String version) {
+    def url = script.scm.userRemoteConfigs.url instanceof Collection ?
+      script.scm.userRemoteConfigs.url.first() :
+      script.scm.userRemoteConfigs.url
+
     script.checkout(
       $class: 'GitSCM',
       branches: [[name: "refs/tags/${tagName(version)}"]],
-      userRemoteConfigs: [[
-        url: script.scm.userRemoteConfigs.url,
-        credentialsId: deployerSSHAgent
-      ]]
+      userRemoteConfigs: [[url: url, credentialsId: deployerSSHAgent]]
     )
   }
 
