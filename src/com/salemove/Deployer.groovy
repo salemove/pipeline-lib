@@ -87,12 +87,12 @@ class Deployer implements Serializable {
   }
 
   def deploy() {
+    github.checkPRMergeable(notifyOnInput: true)
     git.withRemoteTag { version ->
+      pushDockerImage(version)
       inDeployerPod(version) {
+        prepareReleaseTool()
         withRollbackManagement { withLock ->
-          github.checkPRMergeable(notifyOnInput: true)
-          prepareReleaseTool()
-          pushDockerImage(version)
           withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
             deploy(env: envs.acceptance, version: version)
             rollBackForLockedResource()
@@ -423,7 +423,7 @@ class Deployer implements Serializable {
     script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
       script.inDockerAgent(
         name: 'deployer',
-        containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:e38f8db')],
+        containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:327930e')],
         volumes: [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
       ) {
