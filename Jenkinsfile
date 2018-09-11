@@ -23,19 +23,20 @@ def actualResponse = { envName, domainName ->
 }
 def expectedBuildValue = { version -> version }
 def expectedTemplateValue = { version, envName -> "${envName}-${version}" }
-def expectedResponse = { version, envName ->
-  "BUILD_VALUE=${expectedBuildValue(version)}, TEMPLATE_VALUE=${expectedTemplateValue(version, envName)}"
+def expectedResponse = { buildVersion, deployVersion, envName ->
+  "BUILD_VALUE=${expectedBuildValue(buildVersion)}" +
+  ", TEMPLATE_VALUE=${expectedTemplateValue(deployVersion, envName)}"
 }
 
 properties(deployer.wrapProperties())
 
 withResultReporting(slackChannel: '#tm-is') {
   inDockerAgent(deployer.wrapPodTemplate()) {
-    def image, version
+    def image, buildVersion
     stage('Build') {
       checkout(scm)
-      version = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
-      image = docker.build(projectName, "--build-arg 'BUILD_VALUE=${version}' test")
+      buildVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
+      image = docker.build(projectName, "--build-arg 'BUILD_VALUE=${buildVersion}' test")
     }
 
     deployer.deployOnCommentTrigger(
@@ -45,18 +46,20 @@ withResultReporting(slackChannel: '#tm-is') {
       // inAcceptance is deprecated, but is left here to test backwards
       // compatibility
       inAcceptance: {
+        def deployVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
         def response = actualResponse('acceptance', 'at.samo.io')
-        def expectation = expectedResponse(version, 'acceptance')
+        def expectation = expectedResponse(buildVersion, deployVersion, 'acceptance')
 
         if (response != expectation) {
           error("Expected response to be \"${expectation}\", but was \"${response}\"")
         }
       },
       automaticChecksFor: { env ->
+        def deployVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
         env['runInKube'](
           command: './test.sh',
-          additionalArgs: "--env='BUILD_VALUE=${expectedBuildValue(version)}'" +
-            " --env='TEMPLATE_VALUE=${expectedTemplateValue(version, env.name)}'"
+          additionalArgs: "--env='BUILD_VALUE=${expectedBuildValue(buildVersion)}'" +
+            " --env='TEMPLATE_VALUE=${expectedTemplateValue(deployVersion, env.name)}'"
         )
       },
       checklistFor: { env ->
