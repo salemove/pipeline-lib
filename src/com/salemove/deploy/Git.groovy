@@ -59,9 +59,10 @@ class Git implements Serializable {
     script.checkout(
       $class: 'GitSCM',
       branches: [[name: "refs/tags/${tagName(version)}"]],
-      doGenerateSubmoduleConfigurations: script.scm.doGenerateSubmoduleConfigurations,
-      extensions: script.scm.extensions,
-      userRemoteConfigs: script.scm.userRemoteConfigs
+      userRemoteConfigs: [[
+        url: script.scm.userRemoteConfigs.url,
+        credentialsId: deployerSSHAgent
+      ]]
     )
   }
 
