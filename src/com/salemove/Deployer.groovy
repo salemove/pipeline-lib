@@ -335,6 +335,7 @@ class Deployer implements Serializable {
         runInKube: { Map args ->
           def defaultArgs = [
             image: "${dockerRegistryURI}/${image.id.replaceFirst(/:.*$/, '')}:${version}",
+            overwriteEntrypoint: false,
             additionalArgs: ''
           ]
           def finalArgs = defaultArgs << args
@@ -349,6 +350,7 @@ class Deployer implements Serializable {
               ' --attach' +
               ' --rm' +
               " ${finalArgs.additionalArgs}" +
+              " ${finalArgs.overwriteEntrypoint ? '--command' : ''}" +
               " -- ${finalArgs.command}"
             )
           }

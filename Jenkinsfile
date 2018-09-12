@@ -58,6 +58,7 @@ withResultReporting(slackChannel: '#tm-is') {
         def deployVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
         env['runInKube'](
           command: './test.sh',
+          overwriteEntrypoint: true,
           additionalArgs: "--env='BUILD_VALUE=${expectedBuildValue(buildVersion)}'" +
             " --env='TEMPLATE_VALUE=${expectedTemplateValue(deployVersion, env.name)}'"
         )
