@@ -48,9 +48,7 @@ class Github implements Serializable {
       // to a single success status. For non-success statuses, if there are
       // many different states, use the last one.
       .groupBy { it.context }
-      .collect { context, statuses ->
-        statuses.inject { finalStatus, status -> finalStatus.state == 'success' ? finalStatus : status }
-      }
+      .collect { context, statuses -> statuses.max { it.id } }
       .findAll { it.state != 'success' }
 
     nonSuccessStatuses.collect { "Status ${it.context} is marked ${it.state}." }
