@@ -76,7 +76,7 @@ class Github implements Serializable {
       problems << "User${plural ? 's' : ''} ${joinWithAnd(users)} ${plural ? 'have' : 'has'} requested changes."
     }
     if (approvedReviews.size() < 1) {
-      problems << 'PR is not ready to be merged. At least one approval required.'
+      problems << 'At least one approval required.'
     }
     problems
   }
