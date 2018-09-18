@@ -57,10 +57,6 @@ class Github implements Serializable {
   }
 
   private def getReviewProblems() {
-    // Temporarily disable, until pipeline-github-plugin is released with
-    // support for reviews.
-    return []
-
     def finalReviews = script.pullRequest.reviews
       // Include DISMISSED reviews in the search, to ensure previous APPROVED
       // or CHANGES_REQUESTED reviews by the same user are not counted in the
