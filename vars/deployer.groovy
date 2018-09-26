@@ -30,6 +30,8 @@ def wrapProperties(providedProperties = []) {
   ]
 
   if (isDeploy) {
+    Deployer.validateTriggerArgs(this)
+
     tags.add("github_user=${Deployer.deployingUser(this)}")
 
     // Stop all previous builds that are still in progress

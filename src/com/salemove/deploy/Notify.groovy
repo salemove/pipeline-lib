@@ -1,5 +1,7 @@
 package com.salemove.deploy
 
+import com.salemove.deploy.Args
+
 class Notify implements Serializable {
   private def script, kubernetesDeployment, kubernetesNamespace
   Notify(script, args) {
@@ -84,6 +86,12 @@ class Notify implements Serializable {
     script.pullRequest.comment(
       "@${deployingUser()}, the changes were validated in acceptance. Please click **Proceed**" +
       " ${hereMDJobLink()} to continue the deployment."
+    )
+  }
+  def unexpectedArgs() {
+    script.pullRequest.comment(
+      "Sorry, I don't understand. I only support the '${Args.noEnvLock}' argument." +
+      " Check the logs ${hereMDJobLink()} for more information."
     )
   }
 

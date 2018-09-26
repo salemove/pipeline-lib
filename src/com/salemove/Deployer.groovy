@@ -1,5 +1,6 @@
 package com.salemove
 
+import com.salemove.deploy.Args
 import com.salemove.deploy.Git
 import com.salemove.deploy.Github
 import com.salemove.deploy.Notify
@@ -17,6 +18,7 @@ class Deployer implements Serializable {
     |\s*            # Allow optional whitespace after the command
     |\z
   /.stripMargin().trim()
+  private static final compiledTriggerPattern = ~triggerPattern
 
   private static final containerName = 'deployer-container'
   private static final kubeConfFolderPath = '/root/.kube_conf'
@@ -85,6 +87,17 @@ class Deployer implements Serializable {
   static def isDeploy(script) {
     def triggerCause = getTriggerCause(script)
     triggerCause && triggerCause.triggerPattern == triggerPattern
+  }
+  static def validateTriggerArgs(script) {
+    def args = getTriggerArgs(script)
+    if (args && args != Args.noEnvLock) {
+      //  Instantiate the Notify class with empty arguments, because this is a
+      //  static method and we don't have these arguments yet and they're also
+      //  not required for that particular notification.
+      def notify = new Notify(script, [:])
+      notify.unexpectedArgs()
+      script.error("Unexpected !deploy argument(s): \"${args}\". Expecting either nothing or '${Args.noEnvLock}'.")
+    }
   }
 
   static def deployingUser(script) {
@@ -552,9 +565,35 @@ class Deployer implements Serializable {
   }
 
   private def testEnvLock() {
-    'acceptance-environment'
+    envLock('acceptance-environment')
   }
   private def nonTestEnvLock() {
-    'beta-and-prod-environments'
+    envLock('beta-and-prod-environments')
+  }
+  private def envLock(String envName) {
+    if (shouldLockOnlyParticularApplication()) {
+      "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
+    } else {
+      envName
+    }
+  }
+  private def shouldLockOnlyParticularApplication() {
+    //  This assumes that the arguments have already been validated
+    getTriggerArgs(script) == Args.noEnvLock
+  }
+  private static def getTriggerArgs(script) {
+    def triggerCause = getTriggerCause(script)
+    def matcher = compiledTriggerPattern.matcher(triggerCause.comment)
+    if (!matcher.matches()) {
+      //  Assuming this is only called when the build is triggered because of triggerPattern
+      script.echo(
+        'Something\'s wrong! Deploy trigger pattern does not match triggering comment.' +
+        ' This is unexpected and means that we can not parse arguments.' +
+        ' Continuing under the assumption that no arguments were specified.'
+      )
+      return null
+    }
+
+    matcher.group('args')
   }
 }
