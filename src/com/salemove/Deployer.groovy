@@ -389,7 +389,7 @@ class Deployer implements Serializable {
         parameters: checklist.collect { script.booleanParam(it + [defaultValue: false]) }
       )
 
-      // input returns just the value if it has only one paramter, and a map of
+      // input returns just the value if it has only one parameter, and a map of
       // values otherwise. Create a list of names that have `false` values from
       // that response.
       def uncheckedResponses
