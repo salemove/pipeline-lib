@@ -104,12 +104,12 @@ class Deployer implements Serializable {
       inDeployerPod(version) {
         prepareReleaseTool()
         withRollbackManagement { withLock ->
-          withLock('acceptance-environment') { deploy, rollBackForLockedResource ->
+          withLock(testEnvLock()) { deploy, rollBackForLockedResource ->
             deploy(env: envs.acceptance, version: version)
             rollBackForLockedResource()
           }
           confirmNonAcceptanceDeploy()
-          withLock('beta-and-prod-environments') { deploy, rollBackForLockedResource ->
+          withLock(nonTestEnvLock()) { deploy, rollBackForLockedResource ->
             git.checkMasterHasNotChanged()
             github.checkPRMergeable(notifyOnInput: false)
             deploy(env: envs.beta, version: version)
@@ -120,7 +120,7 @@ class Deployer implements Serializable {
             )
             waitForValidationIn(envs.prodUS)
             waitForValidationIn(envs.prodEU)
-            withLock('acceptance-environment') { deployWithATLock, _ ->
+            withLock(testEnvLock()) { deployWithATLock, _ ->
               deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
             }
             mergeToMaster()
@@ -549,5 +549,12 @@ class Deployer implements Serializable {
     script.docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
       image.push(version)
     }
+  }
+
+  private def testEnvLock() {
+    'acceptance-environment'
+  }
+  private def nonTestEnvLock() {
+    'beta-and-prod-environments'
   }
 }
