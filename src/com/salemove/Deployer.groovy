@@ -65,10 +65,11 @@ class Deployer implements Serializable {
   private static final defaultNamespace = 'default'
 
   private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
-    checklistFor, kubernetesNamespace, notify, git, github
+    checklistFor, kubernetesNamespace, notify, git, github, globalLockConfigured
   Deployer(script, Map args) {
     def defaultArgs = [
-      kubernetesNamespace: 'default'
+      kubernetesNamespace: 'default',
+      lockGlobally: true
     ]
     def finalArgs = defaultArgs << args
 
@@ -79,6 +80,7 @@ class Deployer implements Serializable {
     this.automaticChecksFor = finalArgs.automaticChecksFor
     this.checklistFor = finalArgs.checklistFor
     this.kubernetesNamespace = finalArgs.kubernetesNamespace
+    this.globalLockConfigured = finalArgs.lockGlobally
     this.notify = new Notify(script, finalArgs)
     this.git = new Git(script)
     this.github = new Github(script, finalArgs)
@@ -580,7 +582,7 @@ class Deployer implements Serializable {
   }
   private def globalLockRequired() {
     //  This assumes that the arguments have already been validated
-    getTriggerArgs(script) != Args.noGlobalLock
+    globalLockConfigured && getTriggerArgs(script) != Args.noGlobalLock
   }
   private static def getTriggerArgs(script) {
     def triggerCause = getTriggerCause(script)

@@ -43,6 +43,7 @@ withResultReporting(slackChannel: '#tm-is') {
       image: image,
       kubernetesNamespace: 'default',
       kubernetesDeployment: projectName,
+      lockGlobally: false,
       // inAcceptance is deprecated, but is left here to test backwards
       // compatibility
       inAcceptance: {
