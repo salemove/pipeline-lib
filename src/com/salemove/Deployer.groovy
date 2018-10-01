@@ -571,15 +571,15 @@ class Deployer implements Serializable {
     envLock('beta-and-prod-environments')
   }
   private def envLock(String envName) {
-    if (shouldLockOnlyParticularApplication()) {
-      "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
-    } else {
+    if (globalLockRequired()) {
       envName
+    } else {
+      "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
     }
   }
-  private def shouldLockOnlyParticularApplication() {
+  private def globalLockRequired() {
     //  This assumes that the arguments have already been validated
-    getTriggerArgs(script) == Args.noGlobalLock
+    getTriggerArgs(script) != Args.noGlobalLock
   }
   private static def getTriggerArgs(script) {
     def triggerCause = getTriggerCause(script)
