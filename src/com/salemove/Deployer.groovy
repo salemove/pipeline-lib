@@ -93,9 +93,9 @@ class Deployer implements Serializable {
   static def validateTriggerArgs(script) {
     def args = getTriggerArgs(script)
     if (args && args != Args.noGlobalLock) {
-      //  Instantiate the Notify class with empty arguments, because this is a
-      //  static method and we don't have these arguments yet and they're also
-      //  not required for that particular notification.
+      // Instantiate the Notify class with empty arguments, because this is a
+      // static method and we don't have these arguments yet and they're also
+      // not required for that particular notification.
       def notify = new Notify(script, [:])
       notify.unexpectedArgs()
       script.error("Unexpected !deploy argument(s): \"${args}\". Expecting either nothing or '${Args.noGlobalLock}'.")
@@ -581,14 +581,14 @@ class Deployer implements Serializable {
     }
   }
   private def globalLockRequired() {
-    //  This assumes that the arguments have already been validated
+    // This assumes that the arguments have already been validated
     globalLockConfigured && getTriggerArgs(script) != Args.noGlobalLock
   }
   private static def getTriggerArgs(script) {
     def triggerCause = getTriggerCause(script)
     def matcher = compiledTriggerPattern.matcher(triggerCause.comment)
     if (!matcher.matches()) {
-      //  Assuming this is only called when the build is triggered because of triggerPattern
+      // Assuming this is only called when the build is triggered because of triggerPattern
       script.echo(
         'Something\'s wrong! Deploy trigger pattern does not match triggering comment.' +
         ' This is unexpected and means that we can not parse arguments.' +
