@@ -571,10 +571,11 @@ class Deployer implements Serializable {
     envLock('beta-and-prod-environments')
   }
   private def envLock(String envName) {
+    def localLock = "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
     if (globalLockRequired()) {
-      envName
+      [resource: localLock, extra: [[resource: envName]]]
     } else {
-      "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
+      [resource: localLock]
     }
   }
   private def globalLockRequired() {
