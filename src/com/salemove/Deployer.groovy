@@ -90,13 +90,13 @@ class Deployer implements Serializable {
   }
   static def validateTriggerArgs(script) {
     def args = getTriggerArgs(script)
-    if (args && args != Args.noEnvLock) {
+    if (args && args != Args.noGlobalLock) {
       //  Instantiate the Notify class with empty arguments, because this is a
       //  static method and we don't have these arguments yet and they're also
       //  not required for that particular notification.
       def notify = new Notify(script, [:])
       notify.unexpectedArgs()
-      script.error("Unexpected !deploy argument(s): \"${args}\". Expecting either nothing or '${Args.noEnvLock}'.")
+      script.error("Unexpected !deploy argument(s): \"${args}\". Expecting either nothing or '${Args.noGlobalLock}'.")
     }
   }
 
@@ -579,7 +579,7 @@ class Deployer implements Serializable {
   }
   private def shouldLockOnlyParticularApplication() {
     //  This assumes that the arguments have already been validated
-    getTriggerArgs(script) == Args.noEnvLock
+    getTriggerArgs(script) == Args.noGlobalLock
   }
   private static def getTriggerArgs(script) {
     def triggerCause = getTriggerCause(script)

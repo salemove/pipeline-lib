@@ -90,7 +90,7 @@ class Notify implements Serializable {
   }
   def unexpectedArgs() {
     script.pullRequest.comment(
-      "Sorry, I don't understand. I only support the '${Args.noEnvLock}' argument." +
+      "Sorry, I don't understand. I only support the '${Args.noGlobalLock}' argument." +
       " Check the logs ${hereMDJobLink()} for more information."
     )
   }

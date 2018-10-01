@@ -2,5 +2,5 @@ package com.salemove.deploy
 
 
 class Args implements Serializable {
-  public static final noEnvLock = 'no-env-lock'
+  public static final noGlobalLock = 'no-global-lock'
 }
