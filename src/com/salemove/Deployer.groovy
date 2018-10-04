@@ -145,6 +145,11 @@ class Deployer implements Serializable {
     }
   }
 
+  def pushImageForNextDeploy() {
+    def version = git.getShortRevision()
+    pushDockerImage(version)
+  }
+
   static def buildImageIfDoesNotExist(script, String imageName, Closure body) {
     def version = new Git(script).getShortRevision()
     def taggedImageName = "${imageName}:${version}"
