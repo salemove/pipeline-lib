@@ -103,44 +103,50 @@ The exact changes required depend on the project, but here's an example.
 +@Library('SaleMoveAcceptance') __ // <1>
 
  // In podTemplate, inPod, or similar, after building a docker image
- def image = docker.build('call-router')
- imageScanner.scan(image)
+ checkout(scm)
+-def image = docker.build('call-router')
+-imageScanner.scan(image)
++def image = deployer.buildImageIfDoesNotExist(name: 'call-router') { <2>
++  def newImage = docker.build('call-router')
++  imageScanner.scan(newImage)
++  return newImage
++}
 -def shortCommit = sh(returnStdout: true, script: 'git log -n 1 --pretty=format:"%h"').trim()
 -docker.withRegistry(DOCKER_REGISTRY_URL, DOCKER_REGISTRY_CREDENTIALS_ID) {
--  image.push(shortCommit) // <2>
+-  image.push(shortCommit) // <3>
 -}
 
 +deployer.deployOnCommentTrigger(
 +  image: image,
 +  kubernetesNamespace: 'default', // Optional, will deploy to `default` namespace if not specified
 +  kubernetesDeployment: 'call-router',
-+  lockGlobally: true, // Optional, defaults to `true` <3>
++  lockGlobally: true, // Optional, defaults to `true` <4>
 +  automaticChecksFor: { env ->
 +    env['runInKube'](
-+      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <4>
++      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <5>
 +      command: './run_smoke_tests.sh',
-+      overwriteEntrypoint: true, // Optional, defaults to `false` <5>
-+      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <6>
++      overwriteEntrypoint: true, // Optional, defaults to `false` <6>
++      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <7>
 +    )
 +    if (env.name == 'acceptance') {
 +      runAcceptanceTests(
 +        driver: 'chrome',
 +        visitorApp: 'v2',
-+        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <7>
++        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <8>
 +        slackChannel: '#tm-engage,
 +        parallelTestProcessors: 1
 +      )
 +    }
 +  },
 +  checklistFor: { env ->
-+    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <8>
-+    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <9>
++    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <9>
++    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <10>
 +      '(time:(from:now-30m,mode:quick,to:now))&_a=' +
 +      '(query:(language:lucene,query:\'application:call_router+AND+level:error\'))'
 +
 +    [[
-+      name: 'dashboard', // <10>
-+      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <11>
++      name: 'dashboard', // <11>
++      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <12>
 +    ], [
 +      name: 'logs',
 +      description: "No new errors in <a href=\"${logURL}\">the project logs (${logURL})</a>"
@@ -155,28 +161,34 @@ environments. If you already have a `@Library` import followed by a two
 underscores, then change them to three underscores (`___`) or more, as
 required. The symbol {link-using-libraries}[has to be unique] within the
 Jenkinsfile.
-<2> No need to push the image to anywhere. Just build it and pass to
+<2> Wrapping the image building code with `buildImageIfDoesNotExist` is not
+required, but it can significantly speed up the deployment process if you do.
+With it, the image will only be built, if it doesn't already exist. By also
+putting test execution and linting into the same block with building the image,
+these steps can also be skipped, when deploying an image that already exist and
+has gone through these validations.
+<3> No need to push the image to anywhere. Just build it and pass to
 `deployOnCommentTrigger`, which tags and pushes as required.
-<3> Optional. Defaults to `true`. If set to `false`, then deploys of this
+<4> Optional. Defaults to `true`. If set to `false`, then deploys of this
 project will not affect deploys of other projects. That is, this project can
 then be deployed at the same time with other projects. Should only be enabled
 if this project is completely isolated, so that it's tests don't affect other
 projects and other projects' tests and deploys don't affect this project. This
 can be overwritten for individual PRs by triggering the deploy with a
 `!deploy no-global-lock` comment.
-<4> The image defaults to the current version of the application image.
-<5> Optional. Defaults to `false`. If true, then `command` will overwrite the
+<5> The image defaults to the current version of the application image.
+<6> Optional. Defaults to `false`. If true, then `command` will overwrite the
 container's entrypoint, instead of being used as its arguments. In Kubernetes
 terms, the `command` will be specified as the `command` field for the
 container, instead of `args`.
-<6> Optional. Additional arguments to `kubectl run`.
-<7> The tests and the other checks run in acceptance obviously vary by project.
-<8> Use `env.name` to customize links for the specific environment. It's one
+<7> Optional. Additional arguments to `kubectl run`.
+<8> The tests and the other checks run in acceptance obviously vary by project.
+<9> Use `env.name` to customize links for the specific environment. It's one
 of: `acceptance`, `beta`, `prod-us`, and `prod-eu`.
-<9> Use `env.domainName` to customize URLs. For example, it's
+<10> Use `env.domainName` to customize URLs. For example, it's
 `beta.salemove.com` in beta and `salemove.com` in prod US.
-<10> This should be a simple keyword.
-<11> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
+<11> This should be a simple keyword.
+<12> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
 doesn't display links, while the old one does. This means that links have to
 also be included in plain text, for Blue Ocean UI users to see/access them.
 

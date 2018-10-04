@@ -32,11 +32,16 @@ properties(deployer.wrapProperties())
 
 withResultReporting(slackChannel: '#tm-is') {
   inDockerAgent(deployer.wrapPodTemplate()) {
-    def image, buildVersion
-    stage('Build') {
-      checkout(scm)
-      buildVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
-      image = docker.build(projectName, "--build-arg 'BUILD_VALUE=${buildVersion}' test")
+    checkout(scm)
+    def buildVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
+    def image = deployer.buildImageIfDoesNotExist(name: projectName) {
+      stage('Build') {
+        return docker.build(projectName, "--build-arg 'BUILD_VALUE=${buildVersion}' test")
+      }
+    }
+    image.inside {
+      // This might be different, if we're re-using a previously built image
+      buildVersion = sh(script: 'echo $BUILD_VALUE', returnStdout: true).trim()
     }
 
     deployer.deployOnCommentTrigger(

@@ -53,10 +53,19 @@ def wrapProperties(providedProperties = []) {
 }
 
 def deployOnCommentTrigger(Map args) {
-  if (!Deployer.isDeploy(this)) {
-    echo("Build not triggered by ${Deployer.triggerPattern} comment. Not deploying")
-    return
+  if (Deployer.isDeploy(this)) {
+    echo("Starting deploy")
+    new Deployer(this, args).deploy()
+  } else {
+    echo("Build not triggered by !deploy comment. Pushing image to prepare for deploy.")
+    new Deployer(this, args).pushImageForNextDeploy()
+  }
+}
+
+def buildImageIfDoesNotExist(Map args, Closure body) {
+  if (!args || !args.name) {
+    error("'name' needs to be specified for buildImageIfDoesNotExist")
   }
 
-  new Deployer(this, args).deploy()
+  Deployer.buildImageIfDoesNotExist(this, args.name, body)
 }
