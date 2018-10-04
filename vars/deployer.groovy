@@ -60,3 +60,11 @@ def deployOnCommentTrigger(Map args) {
 
   new Deployer(this, args).deploy()
 }
+
+def buildImageIfDoesNotExist(Map args, Closure body) {
+  if (!args || !args.name) {
+    error("'name' needs to be specified for buildImageIfDoesNotExist")
+  }
+
+  Deployer.buildImageIfDoesNotExist(this, args.name, body)
+}

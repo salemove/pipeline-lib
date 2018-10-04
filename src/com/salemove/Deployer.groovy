@@ -145,6 +145,38 @@ class Deployer implements Serializable {
     }
   }
 
+  static def buildImageIfDoesNotExist(script, String imageName, Closure body) {
+    def version = new Git(script).getShortRevision()
+    def taggedImageName = "${imageName}:${version}"
+    def image = script.docker.image(taggedImageName)
+    script.echo("Checking if image ${taggedImageName} already exists")
+    try {
+      script.docker.withRegistry("https://${dockerRegistryURI}", dockerRegistryCredentialsID) {
+        image.pull()
+        // Ensure that the image is available with the correct name + tag by
+        // tagging the image locally without the registry prefix as well.
+        // Otherwise the image can't be referred to without the registry
+        // prefix. Has to be done within `withRegistry` for `image.imageName()`
+        // to include the registry prefix.
+        script.sh("docker tag ${image.imageName()} ${taggedImageName}")
+      }
+      script.echo("Image ${taggedImageName} already exists. Using it instead of rebuilding")
+    } catch(e) {
+      script.echo("Image ${taggedImageName} does not exist. Building a new image")
+      image = body()
+      // Ensure that the image is available with the correct name + tag. If a
+      // different name was specified for `docker.build` in `body` then this
+      // ensures that `imageName` is used. This also alleviates race conditions
+      // caused by using a `:latest` tag by default.
+      //
+      // `sh` with `docker tag` is used instead of `image.tag`, because
+      // `image.tag` uses `image.id` instead of `image.imageName()`, which
+      // doesn't always use a fully qualified name.
+      script.sh("docker tag ${image.imageName()} ${taggedImageName}")
+    }
+    return script.docker.image(taggedImageName)
+  }
+
   private def shEval(String cmd) {
     def secureCmd = """\
     #!/bin/bash
