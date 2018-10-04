@@ -67,18 +67,35 @@ class Git implements Serializable {
     )
   }
 
-  def getShortRevision() {
+  def getPersistentVersion() {
+    if (isMergeCommit()) {
+      "${getMasterRevision()}-${getPRHeadRevision()}"
+    } else {
+      getShortRevision()
+    }
+  }
+
+  private def getShortRevision() {
     shEval('git log -n 1 --pretty=format:\'%h\'')
+  }
+  private def getMasterRevision() {
+    shEval('git log -n 1 --pretty=format:\'%h\' origin/master')
+  }
+  private def getPRHeadRevision() {
+    shEval("git log -n 1 --pretty=format:'%h' ${script.pullRequest.head}")
   }
 
   private def resetMergeCommitAuthor() {
     // Change commit author if merge commit is created by Jenkins
-    def commitAuthor = shEval('git log -n 1 --pretty=format:\'%an\'')
-    if (commitAuthor == 'Jenkins') {
+    if (isMergeCommit()) {
       script.sh('git config user.name "sm-deployer"')
       script.sh('git config user.email "support@salemove.com"')
       script.sh('git commit --amend --no-edit --reset-author')
     }
+  }
+
+  private def isMergeCommit() {
+    shEval('git log -n 1 --pretty=format:\'%an\'') == 'Jenkins'
   }
 
   private def setVersionTag(String version) {

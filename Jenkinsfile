@@ -39,6 +39,10 @@ withResultReporting(slackChannel: '#tm-is') {
         return docker.build(projectName, "--build-arg 'BUILD_VALUE=${buildVersion}' test")
       }
     }
+    image.inside {
+      // This might be different, if we're re-using a previously built image
+      buildVersion = sh(script: 'echo $BUILD_VALUE', returnStdout: true).trim()
+    }
 
     deployer.deployOnCommentTrigger(
       image: image,

@@ -146,12 +146,12 @@ class Deployer implements Serializable {
   }
 
   def pushImageForNextDeploy() {
-    def version = git.getShortRevision()
+    def version = git.getPersistentVersion()
     pushDockerImage(version)
   }
 
   static def buildImageIfDoesNotExist(script, String imageName, Closure body) {
-    def version = new Git(script).getShortRevision()
+    def version = new Git(script).getPersistentVersion()
     def taggedImageName = "${imageName}:${version}"
     def image = script.docker.image(taggedImageName)
     script.echo("Checking if image ${taggedImageName} already exists")
