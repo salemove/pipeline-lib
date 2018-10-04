@@ -7,17 +7,17 @@ import com.salemove.deploy.Notify
 
 class Deployer implements Serializable {
   public static final triggerPattern = /
-    |(?sx)          # Enable flags: DOTALL (dot matches newlines) and COMMENTS (enable these regex comments)
-    |\A
-    |\s*            # Allow optional whitespace before the command
-    |!deploy
-    |(?:            # Don't capture the whitespace before arguments
-      |\s+          # Force whitespace between command and arguments
-      |(?<args>.*?) # Capture arguments with group named "args", non-greedy to avoid capturing trailing whitespace
-    |)?             # Arguments are optional
-    |\s*            # Allow optional whitespace after the command
-    |\z
-  /.stripMargin().trim()
+    (?sx)          # Enable flags: DOTALL (dot matches newlines) and COMMENTS (enable these regex comments)
+    \A
+    \s*            # Allow optional whitespace before the command
+    !deploy
+    (?:            # Don't capture the whitespace before arguments
+      \s+          # Force whitespace between command and arguments
+      (?<args>.*?) # Capture arguments with group named "args", non-greedy to avoid capturing trailing whitespace
+    )?             # Arguments are optional
+    \s*            # Allow optional whitespace after the command
+    \z
+  /.trim()
   private static final compiledTriggerPattern = ~triggerPattern
 
   private static final containerName = 'deployer-container'
