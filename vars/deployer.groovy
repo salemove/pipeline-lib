@@ -57,7 +57,7 @@ def deployOnCommentTrigger(Map args) {
     echo("Starting deploy")
     new Deployer(this, args).deploy()
   } else {
-    echo("Build not triggered by ${Deployer.triggerPattern} comment. Pushing image to prepare for deploy.")
+    echo("Build not triggered by !deploy comment. Pushing image to prepare for deploy.")
     new Deployer(this, args).pushImageForNextDeploy()
   }
 }
