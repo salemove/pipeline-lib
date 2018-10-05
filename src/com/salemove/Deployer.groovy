@@ -165,8 +165,14 @@ class Deployer implements Serializable {
         // to include the registry prefix.
         script.sh("docker tag ${image.imageName()} ${taggedImageName}")
       }
+      // Ensure following commands are not affected by withRegistry
+      script.sh("docker logout https://${dockerRegistryURI}")
+
       script.echo("Image ${taggedImageName} already exists. Using it instead of rebuilding")
     } catch(e) {
+      // Ensure following commands are not affected by withRegistry
+      script.sh("docker logout https://${dockerRegistryURI}")
+
       script.echo("Image ${taggedImageName} does not exist. Building a new image")
       image = body()
       // Ensure that the image is available with the correct name + tag. If a
