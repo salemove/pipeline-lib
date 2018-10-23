@@ -6,10 +6,12 @@ def call(Map args = [:], Closure body) {
     usernameVariable: 'dbUser',
     passwordVariable: 'dbPass'
   )]) {
+    def rubyVersion = args.rubyVersion ?: '2.4'
+
     def defaultArgs = [
       name: 'pipeline-ruby-build',
       containers: [
-        agentContainer(image: 'salemove/jenkins-agent-ruby:2.4.1'),
+        agentContainer(image: "salemove/jenkins-agent-ruby:${rubyVersion}"),
         passiveContainer(
           name: 'db',
           image: 'postgres:9.5.7-alpine',
