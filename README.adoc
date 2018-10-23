@@ -258,12 +258,22 @@ NOTE: `inDockerAgent` is a derivative of <<code-inpod-code>>, so everything
 that applies to `inPod` also applies to `inDockerAgent`.
 
 === `inRubyBuildAgent`
+:link-docker-repository-tags: https://hub.docker.com/r/salemove/jenkins-agent-ruby/tags/
 
 A pod template for building Ruby projects. Comes with an agent container
-with Ruby and Docker support and PostgreSQL and RabbitMQ containers.
+with Ruby and Docker support and PostgreSQL and RabbitMQ containers. Ruby version
+is configurable via `rubyVersion` parameter and defaults to `2.4`. All available
+versions can be found in {link-docker-repository-tags}[Docker repository].
 
 NOTE: `inRubyBuildAgent` is a derivative of <<code-inpod-code>>, so everything
 that applies to `inPod` also applies to `inRubyBuildAgent`.
+
+Example:
+[source,groovy]
+----
+inRubyBuildAgent(
+  rubyVersion: '2.5' // Optional, defaults to 2.4
+)
 
 === `passiveContainer`
 
