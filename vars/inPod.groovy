@@ -4,7 +4,7 @@ def call(Map args = [:], Closure body) {
   def defaultArgs = [
     cloud: 'CI',
     name: 'pipeline-build',
-    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.19-1-alpine')]
+    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.26-1-alpine')]
   ]
 
   // For containers, add the lists together, but remove duplicates by name,
