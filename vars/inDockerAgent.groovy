@@ -3,7 +3,7 @@ import static com.salemove.Collections.addWithoutDuplicates
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     name: 'pipeline-docker-build',
-    containers: [agentContainer(image: 'salemove/jenkins-agent-docker:17.12.0')],
+    containers: [agentContainer(image: 'salemove/jenkins-agent-docker:17.12.0-0dc8e6a')],
     volumes: [hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')]
   ]
 
