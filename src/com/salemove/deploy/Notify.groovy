@@ -23,10 +23,13 @@ class Notify implements Serializable {
     ])
   }
 
-  def envDeploying(env, version, rollbackVersion) {
+  def envDeploying(env, version, rollbackVersion, repository) {
+    def rollbackLink = env.name == 'acceptance' ?  '' :
+      " (<${rollbackURL(env, rollbackVersion, repository)}|roll back>)"
+
     sendSlack(env, [
       message: "${deployingUser()} is updating ${deployedResouce()} to version ${version}" +
-        " in ${env.displayName}. The current version is ${rollbackVersion}."
+        " in ${env.displayName}. The current version is ${rollbackVersion}${rollbackLink}."
     ])
   }
   def envDeploySuccessful(env, version) {
@@ -120,5 +123,13 @@ class Notify implements Serializable {
   private def deployedResouce() {
     "deployment/${kubernetesDeployment}" +
       (kubernetesNamespace == 'default' ? '' : " in ${kubernetesNamespace} namespace")
+  }
+
+  private def rollbackURL(env, rollbackVersion, repository) {
+    'https://jobs.salemove.com/job/deploy-kubernetes-by-revision/parambuild/' +
+    "?repository=${repository}" +
+    "&service=${kubernetesDeployment}" +
+    "&revision=${rollbackVersion}" +
+    "&environment=${env.kubeEnvName}"
   }
 }

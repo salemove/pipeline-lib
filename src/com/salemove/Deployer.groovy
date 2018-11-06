@@ -244,6 +244,7 @@ class Deployer implements Serializable {
 
     def env = finalArgs.env
     def version = finalArgs.version
+    def repository = git.getRepositoryName()
 
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
@@ -255,7 +256,7 @@ class Deployer implements Serializable {
       " --context '${env.kubeContext}'" +
       " --namespace ${kubernetesNamespace}" +
       " --application ${kubernetesDeployment}" +
-      " --repository ${git.getRepositoryName()}" +
+      " --repository ${repository}" +
       ' --no-release-managed' +
       ' --pod-node-selector role=application'
 
@@ -327,7 +328,7 @@ class Deployer implements Serializable {
           def rollbackVersion = getCurrentVersion(kubectlCmd)
           if (rollbackVersion) {
             rollBack = rollbackForVersion(rollbackVersion)
-            notify.envDeploying(env, version, rollbackVersion)
+            notify.envDeploying(env, version, rollbackVersion, repository)
           } else {
             if (env.name == 'acceptance') {
               // User might not be watching the job logs at this stage. Notify them via GitHub.
