@@ -274,6 +274,7 @@ Example:
 inRubyBuildAgent(
   rubyVersion: '2.5' // Optional, defaults to 2.4
 )
+----
 
 === `passiveContainer`
 
