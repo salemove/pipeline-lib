@@ -25,35 +25,16 @@ def call(Map args = [:], Closure body) {
   def mailSend = { mailArgs ->
     def from = JenkinsLocationConfiguration.get().getAdminAddress()
     def buildId = "${env.JOB_NAME} ${currentBuild.displayName}"
-<<<<<<< HEAD
-||||||| parent of 98d3742... fixup! Add email notifications
-    def body = "${env.BUILD_URL}"
-    if (args.log) {
-        def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
-        body = "${body}<br><br>${consoleLog}"
-    }
-=======
-    def body = "${env.BUILD_URL}"
+    def mailBody = "${env.BUILD_URL}"
     if (mailArgs.log) {
-        def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
-        body = "${body}<br><br>${consoleLog}"
+      def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
+      mailBody = "${mailBody}<br><br>${consoleLog}"
     }
->>>>>>> 98d3742... fixup! Add email notifications
     mail(
       from: from,
-<<<<<<< HEAD
-      to: args.to,
-      subject: "${args.message}: ${buildId}",
-      body: "${env.BUILD_URL}",
-||||||| parent of 98d3742... fixup! Add email notifications
-      to: args.to,
-      subject: "${args.message}: ${buildId}",
-      body: body,
-=======
       to: mailArgs.to,
       subject: "${mailArgs.message}: ${buildId}",
-      body: body,
->>>>>>> 98d3742... fixup! Add email notifications
+      body: mailBody,
       mimeType: 'text/html',
       cc: '',
       bcc: '',
@@ -108,12 +89,12 @@ def call(Map args = [:], Closure body) {
           def lastResult = retrieveLastResult(currentBuild)
           if (lastResult != 'SUCCESS') {
             def message = "Jenkins build is back to normal"
-            mailSend([message: message, to: finalArgs.mailto])
+            mailSend(message: message, to: finalArgs.mailto)
           }
           break
         case 'FAILURE':
           def message = "Build failed in Jenkins"
-          mailSend([message: message, to: finalArgs.mailto])
+          mailSend(message: message, to: finalArgs.mailto, log: true)
           break
       }
     }
