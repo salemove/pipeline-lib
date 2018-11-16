@@ -1,3 +1,5 @@
+import jenkins.model.*
+
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     slackChannel: '#ci',
@@ -5,6 +7,59 @@ def call(Map args = [:], Closure body) {
     strategy: 'onMainBranchChange'
   ]
   def finalArgs = defaultArgs << args
+
+  // Recursive closure getting the result of the last completed build that is either
+  // SUCCESS or FAILURE (which means, builds with ABORTED or UNSTABLE are ignored)
+  def retrieveLastResult
+  retrieveLastResult = { build ->
+    def previousBuild = build?.previousBuild
+    if (previousBuild) {
+      def result = previousBuild.result
+      if (result in ['SUCCESS', 'FAILURE']) {
+        result
+      } else {
+        retrieveLastResult(previousBuild)
+      }
+    }
+  }
+  def mailSend = { mailArgs ->
+    def from = JenkinsLocationConfiguration.get().getAdminAddress()
+    def buildId = "${env.JOB_NAME} ${currentBuild.displayName}"
+<<<<<<< HEAD
+||||||| parent of 98d3742... fixup! Add email notifications
+    def body = "${env.BUILD_URL}"
+    if (args.log) {
+        def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
+        body = "${body}<br><br>${consoleLog}"
+    }
+=======
+    def body = "${env.BUILD_URL}"
+    if (mailArgs.log) {
+        def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
+        body = "${body}<br><br>${consoleLog}"
+    }
+>>>>>>> 98d3742... fixup! Add email notifications
+    mail(
+      from: from,
+<<<<<<< HEAD
+      to: args.to,
+      subject: "${args.message}: ${buildId}",
+      body: "${env.BUILD_URL}",
+||||||| parent of 98d3742... fixup! Add email notifications
+      to: args.to,
+      subject: "${args.message}: ${buildId}",
+      body: body,
+=======
+      to: mailArgs.to,
+      subject: "${mailArgs.message}: ${buildId}",
+      body: body,
+>>>>>>> 98d3742... fixup! Add email notifications
+      mimeType: 'text/html',
+      cc: '',
+      bcc: '',
+      replyTo: ''
+    )
+  }
 
   try {
     body()
@@ -46,6 +101,21 @@ def call(Map args = [:], Closure body) {
       default:
         error('Invalid strategy specified for withResultReporting')
         break
+    }
+    if (finalArgs.mailto) {
+      switch(currentResult) {
+        case 'SUCCESS':
+          def lastResult = retrieveLastResult(currentBuild)
+          if (lastResult != 'SUCCESS') {
+            def message = "Jenkins build is back to normal"
+            mailSend([message: message, to: finalArgs.mailto])
+          }
+          break
+        case 'FAILURE':
+          def message = "Build failed in Jenkins"
+          mailSend([message: message, to: finalArgs.mailto])
+          break
+      }
     }
   }
 }
