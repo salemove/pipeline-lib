@@ -45,7 +45,7 @@ def call(Map args = [:], Closure body) {
   try {
     body()
   } catch (e) {
-    currentBuild.result = 'FAILED'
+    currentBuild.result = 'FAILURE'
     throw e
   } finally {
     // currentBuild.result of null indicates success.
