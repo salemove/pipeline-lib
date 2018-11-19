@@ -413,17 +413,14 @@ withResultReporting(customMessage: "Build was started with: ${params.buildParam}
 ----
 
 If `mailto` argument has been specified, then a notification is also sent to the
-email, specified in this argument. The logic is the same as in
-**E-mail notification** post-build action of {link-mailer-plugin}[Mailer plugin]:
-
-- For a failed build a notification is always sent, and 100 last lines of console
-log are included into the notification.
-- For a successful built a notification is only sent if the previous build failed.
+email, specified in this argument. The wording is similar to the one in
+**E-mail notification** post-build action of {link-mailer-plugin}[Mailer plugin].
+For a failed build, 250 last lines of console log are also included into the
+notification (the length is configurable via `maxLogLines` argument).
 [source,groovy]
 ----
 withResultReporting(
   slackChannel: '#tm-inf',
-  strategy: 'onFailure',
   mailto: 'operations@salemove.com'
 ) {
   inPod {
