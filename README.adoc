@@ -386,7 +386,7 @@ properties([
   pipelineTriggers([cron('30 10 * * 5')])
 ])
 
-withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
+withResultReporting(slackChannel: '#tm-inf', strategy: 'onFailure') {
   inPod {
     // Do something
   }
@@ -422,7 +422,7 @@ log are included into the notification.
 [source,groovy]
 ----
 withResultReporting(
-  slackChannel: '#tm-is',
+  slackChannel: '#tm-inf',
   strategy: 'onFailure',
   mailto: 'operations@salemove.com'
 ) {
