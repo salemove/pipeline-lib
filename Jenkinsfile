@@ -30,7 +30,7 @@ def expectedResponse = { buildVersion, deployVersion, envName ->
 
 properties(deployer.wrapProperties())
 
-withResultReporting(slackChannel: '#tm-is') {
+withResultReporting(slackChannel: '#tm-inf') {
   inDockerAgent(deployer.wrapPodTemplate()) {
     checkout(scm)
     def buildVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()

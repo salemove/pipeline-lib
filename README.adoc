@@ -354,9 +354,10 @@ WARNING: Only specify the `name`, `workingDir`, `command`, `args`, and/or
 `ttyEnabled` fields for `agentContainer` if you know what you're doing.
 
 === `withResultReporting`
+:link-mailer-plugin: https://wiki.jenkins.io/display/JENKINS/Mailer
 
 A scripted pipeline footnote:[As opposed to declarative pipelines.]
-wrapper that sends build status notifications to Slack.
+wrapper that sends build status notifications to Slack and optionally email.
 
 Without specifying any arguments it sends Slack notifications to the #ci
 channel whenever a master branch build status changes from success to failure
@@ -385,7 +386,7 @@ properties([
   pipelineTriggers([cron('30 10 * * 5')])
 ])
 
-withResultReporting(slackChannel: '#tm-is', strategy: 'onFailure') {
+withResultReporting(slackChannel: '#tm-inf', strategy: 'onFailure') {
   inPod {
     // Do something
   }
@@ -410,6 +411,24 @@ withResultReporting(customMessage: "Build was started with: ${params.buildParam}
   }
 }
 ----
+
+If `mailto` argument has been specified, then a notification is also sent to the
+email, specified in this argument. The wording is similar to the one in
+**E-mail notification** post-build action of {link-mailer-plugin}[Mailer plugin].
+For a failed build, 250 last lines of console log are also included into the
+notification (the length is configurable via `maxLogLines` argument).
+[source,groovy]
+----
+withResultReporting(
+  slackChannel: '#tm-inf',
+  mailto: 'operations@salemove.com'
+) {
+  inPod {
+    // Do something
+  }
+}
+----
+
 
 == Developing
 
