@@ -4,7 +4,8 @@ def call(Map args = [:], Closure body) {
   def defaultArgs = [
     slackChannel: '#ci',
     mainBranch: 'master',
-    strategy: 'onMainBranchChange'
+    strategy: 'onMainBranchChange',
+    maxLogLines: 250
   ]
   def finalArgs = defaultArgs << args
 
@@ -31,7 +32,7 @@ def call(Map args = [:], Closure body) {
     def buildId = "${env.JOB_NAME} ${currentBuild.displayName}"
     def mailBody = "${env.BUILD_URL}"
     if (mailArgs.log) {
-      def consoleLog = currentBuild.rawBuild.getLog(100).join('<br>')
+      def consoleLog = currentBuild.rawBuild.getLog(finalArgs.maxLogLines).join('<br>')
       mailBody = "${mailBody}<br><br>${consoleLog}"
     }
     mail(
