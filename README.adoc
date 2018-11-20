@@ -379,7 +379,7 @@ can be enabled for that branch by specifying `mainBranch`. E.g.
 
 For non-branch builds, such as cronjobs or manually started jobs, the above
 status reporting strategy does not make sense. In these cases a simpler
-`onFailure` or `always` strategy can be used.
+`onFailure`, `onFailureAndRecovery` or `always` strategy can be used.
 [source,groovy]
 ----
 properties([
@@ -421,6 +421,7 @@ notification (the length is configurable via `maxLogLines` argument).
 ----
 withResultReporting(
   slackChannel: '#tm-inf',
+  strategy: 'onFailureAndRecovery'
   mailto: 'operations@salemove.com'
 ) {
   inPod {

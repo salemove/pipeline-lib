@@ -61,9 +61,9 @@ def call(Map args = [:], Closure body) {
       buildDescription += "\n${finalArgs.customMessage}"
     }
 
+    def statusChanged = retrieveLastResult(currentBuild) != currentResult
     switch(finalArgs.strategy) {
       case 'onMainBranchChange':
-        def statusChanged = retrieveLastResult(currentBuild) != currentResult
         if (statusChanged && env.BRANCH_NAME == finalArgs.mainBranch) {
           if (currentResult == 'SUCCESS') {
             slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
@@ -76,6 +76,17 @@ def call(Map args = [:], Closure body) {
         break
       case 'onFailure':
         if (currentResult != 'SUCCESS') {
+          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+          mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
+        }
+        break
+      case 'onFailureAndRecovery':
+        if (currentResult == 'SUCCESS') {
+          if (statusChanged) {
+            slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
+            mailSend(to: finalArgs.mailto, message: "Jenkins build is back to normal")
+          }
+        } else {
           slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
           mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
         }
