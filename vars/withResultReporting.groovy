@@ -64,7 +64,7 @@ def call(Map args = [:], Closure body) {
     switch(finalArgs.strategy) {
       case 'onMainBranchChange':
         def statusChanged = retrieveLastResult(currentBuild) != currentResult
-        if (statusChanged && BRANCH_NAME == finalArgs.mainBranch) {
+        if (statusChanged && env.BRANCH_NAME == finalArgs.mainBranch) {
           if (currentResult == 'SUCCESS') {
             slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
             mailSend(to: finalArgs.mailto, message: "Jenkins build is back to normal")
