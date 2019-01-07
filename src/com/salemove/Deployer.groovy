@@ -493,7 +493,7 @@ class Deployer implements Serializable {
       script.inDockerAgent(
         name: 'deployer',
         containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:327930e')],
-        volumes: [script.secretVolume(mountPath: kubeConfFolderPath, secretName: 'kube-config')],
+        volumes: [script.configMapVolume(mountPath: kubeConfFolderPath, configMapName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
       ) {
         git.checkoutVersionTag(version)
