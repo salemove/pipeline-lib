@@ -3,11 +3,12 @@ package com.salemove.deploy
 import com.salemove.deploy.Args
 
 class Notify implements Serializable {
-  private def script, kubernetesDeployment, kubernetesNamespace
+  private def script, kubernetesDeployment, kubernetesNamespace, threadIds
   Notify(script, args) {
     this.script = script
     this.kubernetesDeployment = args.kubernetesDeployment
     this.kubernetesNamespace = args.kubernetesNamespace
+    this.threadIds = [:]
   }
 
   def envDeployingForFirstTime(env, version) {
@@ -101,12 +102,15 @@ class Notify implements Serializable {
   private def sendSlack(env, Map args) {
     // The << operator mutates the left-hand map. Start with an empty map ([:])
     // to avoid mutating user-provided object.
-    script.slackSend([:] << args << [
-      channel: env.slackChannel,
+    def resp = script.slackSend([:] << args << [
+      channel: threadIds[env.slackChannel] ?: env.slackChannel,
       message: "${args.message}" +
         "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>" +
         "\nOpen in <${script.RUN_DISPLAY_URL}|Blue Ocean> or <${script.BUILD_URL}/console|Old UI>"
     ])
+    if (!threadIds[env.slackChannel]) {
+      threadIds[env.slackChannel] = resp.threadId
+    }
   }
 
   private def deployingUser() {
