@@ -49,6 +49,7 @@ class Notify implements Serializable {
   def envRollbackFailed(env, rollbackVersion) {
     sendSlack(env, [
       color: 'danger',
+      replyBroadcast: true,
       message: "Failed to roll back ${deployedResouce()} to version ${rollbackVersion}" +
         " in ${env.displayName}. Manual intervention is required!"
     ])
@@ -61,6 +62,7 @@ class Notify implements Serializable {
   def envDeployDeletionFailed(env) {
     sendSlack(env, [
       color: 'danger',
+      replyBroadcast: true,
       message: "Failed to roll back ${deployedResouce()} by deleting it" +
         " in ${env.displayName}. Manual intervention is required!"
     ])
@@ -73,6 +75,7 @@ class Notify implements Serializable {
   def envUndoFailed(env) {
     sendSlack(env, [
       color: 'danger',
+      replyBroadcast: true,
       message: "Failed to undo update to ${deployedResouce()} in ${env.displayName}." +
         ' Manual intervention is required!'
     ])
