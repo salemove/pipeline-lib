@@ -47,7 +47,21 @@ def call(Map args = [:], Closure body) {
     )
   }
 
+  def buildDescription = "${JOB_NAME} (Open <${RUN_DISPLAY_URL}|Blue Ocean> or <${BUILD_URL}|Old UI>)"
+  if (finalArgs.customMessage) {
+    buildDescription += "\n${finalArgs.customMessage}"
+  }
+
+  def threadId
+  def sendStartMessage = { ->
+    if (finalArgs.strategy == 'always') {
+      def resp = slackSend(channel: finalArgs.slackChannel, message: "Started: ${buildDescription}")
+      threadId = resp.threadId
+    }
+  }
+
   try {
+    sendStartMessage()
     body()
   } catch (e) {
     currentBuild.result = 'FAILURE'
@@ -55,13 +69,8 @@ def call(Map args = [:], Closure body) {
   } finally {
     // currentBuild.result of null indicates success.
     def currentResult = currentBuild.result ?: 'SUCCESS'
-
-    def buildDescription = "${JOB_NAME} (Open <${RUN_DISPLAY_URL}|Blue Ocean> or <${BUILD_URL}|Old UI>)"
-    if (finalArgs.customMessage) {
-      buildDescription += "\n${finalArgs.customMessage}"
-    }
-
     def statusChanged = retrieveLastResult(currentBuild) != currentResult
+
     switch(finalArgs.strategy) {
       case 'onMainBranchChange':
         if (statusChanged && env.BRANCH_NAME == finalArgs.mainBranch) {
@@ -93,10 +102,10 @@ def call(Map args = [:], Closure body) {
         break
       case 'always':
         if (currentResult == 'SUCCESS') {
-          slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
+          slackSend(channel: threadId, color: 'good', message: "Success: ${buildDescription}")
           mailSend(to: finalArgs.mailto, message: "Jenkins build successful")
         } else {
-          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+          slackSend(channel: threadId, color: 'danger', replyBroadcast: true, message: "Failure: ${buildDescription}")
           mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
         }
         break
