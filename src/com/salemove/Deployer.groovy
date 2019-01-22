@@ -27,22 +27,22 @@ class Deployer implements Serializable {
       name: 'acceptance',
       displayName: 'acceptance',
       kubeEnvName: 'acceptance',
-      kubeContext: '',
+      kubeContext: 'acceptance',
       domainName: 'at.samo.io',
       slackChannel: '#ci'
     ],
     beta: [
       name: 'beta',
       displayName: 'beta',
-      kubeEnvName: 'staging',
-      kubeContext: 'staging',
+      kubeEnvName: 'beta',
+      kubeContext: 'beta',
       domainName: 'beta.salemove.com',
       slackChannel: '#beta'
     ],
     prodUS: [
       name: 'prod-us',
       displayName: 'production US',
-      kubeEnvName: 'production',
+      kubeEnvName: 'prod-us',
       kubeContext: 'prod-us',
       domainName: 'salemove.com',
       slackChannel: '#production'
