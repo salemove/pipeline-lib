@@ -27,7 +27,6 @@ class Deployer implements Serializable {
       name: 'acceptance',
       displayName: 'acceptance',
       kubeEnvName: 'acceptance',
-      kubeContext: 'acceptance',
       domainName: 'at.samo.io',
       slackChannel: '#ci'
     ],
@@ -35,7 +34,6 @@ class Deployer implements Serializable {
       name: 'beta',
       displayName: 'beta',
       kubeEnvName: 'beta',
-      kubeContext: 'beta',
       domainName: 'beta.salemove.com',
       slackChannel: '#beta'
     ],
@@ -43,7 +41,6 @@ class Deployer implements Serializable {
       name: 'prod-us',
       displayName: 'production US',
       kubeEnvName: 'prod-us',
-      kubeContext: 'prod-us',
       domainName: 'salemove.com',
       slackChannel: '#production'
     ],
@@ -51,7 +48,6 @@ class Deployer implements Serializable {
       name: 'prod-eu',
       displayName: 'production EU',
       kubeEnvName: 'prod-eu',
-      kubeContext: 'prod-eu',
       domainName: 'salemove.eu',
       slackChannel: '#production'
     ]
@@ -248,12 +244,12 @@ class Deployer implements Serializable {
 
     def kubectlCmd = "kubectl" +
       " --kubeconfig=${kubeConfFolderPath}/config" +
-      " --context=${env.kubeContext}" +
+      " --context=${env.kubeEnvName}" +
       " --namespace=${kubernetesNamespace}"
     def deployCmd = "${releaseProjectSubdir}/deploy_service.rb" +
       " --kubeconfig ${kubeConfFolderPath}/config" +
       " --environment ${env.kubeEnvName}" +
-      " --context '${env.kubeContext}'" +
+      " --context '${env.kubeEnvName}'" +
       " --namespace ${kubernetesNamespace}" +
       " --application ${kubernetesDeployment}" +
       " --repository ${repository}" +
