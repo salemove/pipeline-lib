@@ -133,10 +133,10 @@ class Notify implements Serializable {
   }
 
   private def rollbackURL(env, rollbackVersion, repository) {
-    'https://jobs.salemove.com/job/deploy-kubernetes-by-revision/parambuild/' +
+    'https://jenkins.salemove.com/job/deploy/job/application/parambuild/' +
     "?repository=${repository}" +
-    "&service=${kubernetesDeployment}" +
-    "&revision=${rollbackVersion}" +
+    "&application=${kubernetesDeployment}" +
+    "&version=${rollbackVersion}" +
     "&environment=${env.kubeEnvName}"
   }
 }
