@@ -13,13 +13,13 @@ class Notify implements Serializable {
 
   def envDeployingForFirstTime(env, version) {
     sendSlack(env, [
-      message: "${deployingUser()} is creating ${deployedResouce()} with version ${version}" +
+      message: "${deployingUser()} is creating ${deployedResouce()} with version `${version}`" +
         " in ${env.displayName}. This is the first deploy for this application."
     ])
   }
   def envDeployingVersionedForFirstTime(env, version) {
     sendSlack(env, [
-      message: "${deployingUser()} is creating ${deployedResouce()} with version ${version}" +
+      message: "${deployingUser()} is creating ${deployedResouce()} with version `${version}`" +
         " in ${env.displayName}. This is the first versioned deploy for this application."
     ])
   }
@@ -29,20 +29,20 @@ class Notify implements Serializable {
       " (<${rollbackURL(env, rollbackVersion, repository)}|roll back>)"
 
     sendSlack(env, [
-      message: "${deployingUser()} is updating ${deployedResouce()} to version ${version}" +
-        " in ${env.displayName}. The current version is ${rollbackVersion}${rollbackLink}."
+      message: "${deployingUser()} is updating ${deployedResouce()} to version `${version}`" +
+        " in ${env.displayName}. The current version is `${rollbackVersion}`${rollbackLink}."
     ])
   }
   def envDeploySuccessful(env, version) {
     sendSlack(env, [
       color: 'good',
-      message: "Successfully updated ${deployedResouce()} to version ${version}" +
+      message: "Successfully updated ${deployedResouce()} to version `${version}`" +
         " in ${env.displayName}."
     ])
   }
   def envRollingBack(env, rollbackVersion) {
     sendSlack(env, [
-      message: "Rolling back ${deployedResouce()} to version ${rollbackVersion}" +
+      message: "Rolling back ${deployedResouce()} to version `${rollbackVersion}`" +
         " in ${env.displayName}."
     ])
   }
@@ -50,7 +50,7 @@ class Notify implements Serializable {
     sendSlack(env, [
       color: 'danger',
       replyBroadcast: true,
-      message: "Failed to roll back ${deployedResouce()} to version ${rollbackVersion}" +
+      message: "Failed to roll back ${deployedResouce()} to version `${rollbackVersion}`" +
         " in ${env.displayName}. Manual intervention is required!"
     ])
   }
