@@ -94,6 +94,7 @@ Or wrap an existing `properties` call with the provided wrapper:
 
 ==== Enabling deploy on comment trigger
 :link-using-libraries: https://jenkins.io/doc/book/pipeline/shared-libraries/#using-libraries
+:link-timeout-docs: https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#timeout-enforce-time-limit
 
 The exact changes required depend on the project, but here's an example.
 [source,diff]
@@ -121,32 +122,33 @@ The exact changes required depend on the project, but here's an example.
 +  kubernetesNamespace: 'default', // Optional, will deploy to `default` namespace if not specified
 +  kubernetesDeployment: 'call-router',
 +  lockGlobally: true, // Optional, defaults to `true` <4>
++  deploymentUpdateTimeout: [time: 10, unit: 'MINUTES'], // Optional, defaults to 10 minutes <5>
 +  automaticChecksFor: { env ->
 +    env['runInKube'](
-+      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <5>
++      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <6>
 +      command: './run_smoke_tests.sh',
-+      overwriteEntrypoint: true, // Optional, defaults to `false` <6>
-+      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <7>
++      overwriteEntrypoint: true, // Optional, defaults to `false` <7>
++      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <8>
 +    )
 +    if (env.name == 'acceptance') {
 +      runAcceptanceTests(
 +        driver: 'chrome',
 +        visitorApp: 'v2',
-+        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <8>
++        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <9>
 +        slackChannel: '#tm-engage,
 +        parallelTestProcessors: 1
 +      )
 +    }
 +  },
 +  checklistFor: { env ->
-+    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <9>
-+    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <10>
++    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <10>
++    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <11>
 +      '(time:(from:now-30m,mode:quick,to:now))&_a=' +
 +      '(query:(language:lucene,query:\'application:call_router+AND+level:error\'))'
 +
 +    [[
-+      name: 'dashboard', // <11>
-+      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <12>
++      name: 'dashboard', // <12>
++      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <13>
 +    ], [
 +      name: 'logs',
 +      description: "No new errors in <a href=\"${logURL}\">the project logs (${logURL})</a>"
@@ -176,19 +178,21 @@ if this project is completely isolated, so that it's tests don't affect other
 projects and other projects' tests and deploys don't affect this project. This
 can be overwritten for individual PRs by triggering the deploy with a
 `!deploy no-global-lock` comment.
-<5> The image defaults to the current version of the application image.
-<6> Optional. Defaults to `false`. If true, then `command` will overwrite the
+<5> Optional. Defaults to 10 minutes. Allowed values for `unit` are listed in
+{link-timeout-docs}[Jenkins documentation for `timeout`].
+<6> The image defaults to the current version of the application image.
+<7> Optional. Defaults to `false`. If true, then `command` will overwrite the
 container's entrypoint, instead of being used as its arguments. In Kubernetes
 terms, the `command` will be specified as the `command` field for the
 container, instead of `args`.
-<7> Optional. Additional arguments to `kubectl run`.
-<8> The tests and the other checks run in acceptance obviously vary by project.
-<9> Use `env.name` to customize links for the specific environment. It's one
+<8> Optional. Additional arguments to `kubectl run`.
+<9> The tests and the other checks run in acceptance obviously vary by project.
+<10> Use `env.name` to customize links for the specific environment. It's one
 of: `acceptance`, `beta`, `prod-us`, and `prod-eu`.
-<10> Use `env.domainName` to customize URLs. For example, it's
+<11> Use `env.domainName` to customize URLs. For example, it's
 `beta.salemove.com` in beta and `salemove.com` in prod US.
-<11> This should be a simple keyword.
-<12> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
+<12> This should be a simple keyword.
+<13> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
 doesn't display links, while the old one does. This means that links have to
 also be included in plain text, for Blue Ocean UI users to see/access them.
 

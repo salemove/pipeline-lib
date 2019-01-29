@@ -52,7 +52,6 @@ class Deployer implements Serializable {
       slackChannel: '#production'
     ]
   ]
-  private static final deploymentUpdateTimeout = [time: 10, unit: 'MINUTES']
   private static final releaseProjectSubdir = '__release'
   private static final rootDirRelativeToReleaseProject = '..'
   private static final deployerSSHAgent = 'c5628152-9b4d-44ac-bd07-c3e2038b9d06'
@@ -61,11 +60,13 @@ class Deployer implements Serializable {
   private static final defaultNamespace = 'default'
 
   private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
-    checklistFor, kubernetesNamespace, notify, git, github, globalLockConfigured
+    checklistFor, kubernetesNamespace, notify, git, github, globalLockConfigured,
+    deploymentUpdateTimeout
   Deployer(script, Map args) {
     def defaultArgs = [
       kubernetesNamespace: 'default',
-      lockGlobally: true
+      lockGlobally: true,
+      deploymentUpdateTimeout: [time: 10, unit: 'MINUTES']
     ]
     def finalArgs = defaultArgs << args
 
@@ -77,6 +78,7 @@ class Deployer implements Serializable {
     this.checklistFor = finalArgs.checklistFor
     this.kubernetesNamespace = finalArgs.kubernetesNamespace
     this.globalLockConfigured = finalArgs.lockGlobally
+    this.deploymentUpdateTimeout = finalArgs.deploymentUpdateTimeout
     this.notify = new Notify(script, finalArgs)
     this.git = new Git(script)
     this.github = new Github(script, finalArgs)

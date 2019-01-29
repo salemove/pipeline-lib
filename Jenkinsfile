@@ -49,6 +49,7 @@ withResultReporting(slackChannel: '#tm-inf') {
       kubernetesNamespace: 'default',
       kubernetesDeployment: projectName,
       lockGlobally: false,
+      deploymentUpdateTimeout: [time: 2, unit: 'MINUTES'],
       // inAcceptance is deprecated, but is left here to test backwards
       // compatibility
       inAcceptance: {
