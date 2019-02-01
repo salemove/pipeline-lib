@@ -72,6 +72,9 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
 
 def updateStaticAssets(Map args) {
   stash(name: 'assets', include: "${args.assetsFolder}/**/*")
+  if (args.integritiesFile) {
+    stash(name: 'integrities', includes: args.integritiesFile)
+  }
 
   withCredentials([
     string(variable: 'assumer', credentialsId: 'asset-publisher-assumer-iam-role'),
@@ -107,7 +110,13 @@ def updateStaticAssets(Map args) {
           }
         }
         stage ('Deploy to Acceptance Environment') {
-          sh("${releaseProjectSubdir}/update_static_asset_versions ${args.assetVersions}")
+          def script = "${releaseProjectSubdir}/update_static_asset_versions"
+          if (args.integritiesFile) {
+            unstash('integrities')
+            sh("${script} ${args.assetVersions} ${args.integritiesFile}")
+          } else {
+            sh("${script} ${args.assetVersions}")
+          }
         }
       }
     }

@@ -220,13 +220,17 @@ deploy them to acceptance. It takes the following arguments:
   minified, etc) static assets. Relative to the current working directory.
 * `assetVersions`: The updated asset versions in the
   {link-version-format}[literal ConfigMap format].
+* `integritiesFile`: Optional. Path to a JSON manifest of all the included
+  assets, including their integrities (hashes). Relative to the current working
+  directory.
 
 Example:
 [source,groovy]
 ----
 deployer.updateStaticAssets(
   assetsFolder: 'dist',
-  assetVersions: 'visitor-app.v1=507d427'
+  assetVersions: 'visitor-app.v1=507d427',
+  integritiesFile: 'integrities.json' // Optional
 )
 ----
 
