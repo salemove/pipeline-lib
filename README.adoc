@@ -210,6 +210,26 @@ you've opened a PR with the Jenkinsfile changes described above.]
 footnote:[Ensure that `continuous-integration/jenkins/pr-merge` and
 `review/squash` are also checked.]
 
+==== `updateStaticAssets`
+:link-version-format: http://kubernetes.io/docs/user-guide/configmap/#creating-from-literal-values
+
+`deployer.updateStaticAssets` can be used to upload static assets to S3 and
+deploy them to acceptance. It takes the following arguments:
+
+* `assetsFolder`: The path to a folder with distribution-ready (compiled,
+  minified, etc) static assets. Relative to the current working directory.
+* `assetVersions`: The updated asset versions in the
+  {link-version-format}[literal ConfigMap format].
+
+Example:
+[source,groovy]
+----
+deployer.updateStaticAssets(
+  assetsFolder: 'dist',
+  assetVersions: 'visitor-app.v1=507d427'
+)
+----
+
 
 === `inPod`
 :link-pod-template: https://github.com/jenkinsci/kubernetes-plugin#pod-and-container-template-configuration

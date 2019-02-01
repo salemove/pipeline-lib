@@ -69,3 +69,47 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
 
   Deployer.buildImageIfDoesNotExist(this, args.name, body)
 }
+
+def updateStaticAssets(Map args) {
+  stash(name: 'assets', include: "${args.assetsFolder}/**/*")
+
+  withCredentials([
+    string(variable: 'assumer', credentialsId: 'asset-publisher-assumer-iam-role'),
+    string(variable: 'publisher', credentialsId: 'asset-publisher-iam-role')
+  ]) {
+    inPod(
+      containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:2be721c')],
+      annotations: [podAnnotation(key: 'iam.amazonaws.com/role', value: assumer)]
+    ) {
+      def releaseProjectSubdir = '__release'
+      checkout([
+        $class: 'GitSCM',
+        branches: [[name: 'master']],
+        userRemoteConfigs: [[
+          url: 'git@github.com:salemove/release.git',
+          credentialsId: scm.userRemoteConfigs[0].credentialsId
+        ]],
+        extensions: [
+          [$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir],
+          [$class: 'CloneOption', noTags: true, shallow: true]
+        ]
+      ])
+
+      container('toolbox') {
+        stage('Publish assets to S3') {
+          unstash('assets')
+
+          withEnv([
+            'S3_BUCKET=libs.salemove.com',
+            "DIST=${args.assetsFolder}"
+          ]) {
+            sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
+          }
+        }
+        stage ('Deploy to Acceptance Environment') {
+          sh("${releaseProjectSubdir}/update_static_asset_versions ${args.assetVersions}")
+        }
+      }
+    }
+  }
+}
