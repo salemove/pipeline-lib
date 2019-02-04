@@ -71,7 +71,7 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
 }
 
 def updateStaticAssets(Map args) {
-  stash(name: 'assets', include: "${args.assetsFolder}/**/*")
+  stash(name: 'assets', includes: "${args.assetsFolder}/**/*")
   if (args.integritiesFile) {
     stash(name: 'integrities', includes: args.integritiesFile)
   }
