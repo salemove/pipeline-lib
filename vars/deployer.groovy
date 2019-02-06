@@ -70,16 +70,13 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
   Deployer.buildImageIfDoesNotExist(this, args.name, body)
 }
 
-def updateStaticAssets(Map args) {
+def publishAssets(Map args) {
   def defaultArgs = [
     s3Bucket: 'libs.salemove.com'
   ]
   def finalArgs = defaultArgs << args
 
-  stash(name: 'assets', includes: "${finalArgs.assetsFolder}/**/*")
-  if (finalArgs.integritiesFile) {
-    stash(name: 'integrities', includes: finalArgs.integritiesFile)
-  }
+  stash(name: 'assets', includes: "${finalArgs.folder}/**/*")
 
   withCredentials([
     string(variable: 'assumer', credentialsId: 'asset-publisher-assumer-iam-role'),
@@ -109,19 +106,44 @@ def updateStaticAssets(Map args) {
 
           withEnv([
             "S3_BUCKET=${finalArgs.s3Bucket}",
-            "DIST=${finalArgs.assetsFolder}"
+            "DIST=${finalArgs.folder}"
           ]) {
             sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
           }
         }
-        stage ('Deploy to Acceptance Environment') {
-          def script = "${releaseProjectSubdir}/update_static_asset_versions"
-          if (finalArgs.integritiesFile) {
-            unstash('integrities')
-            sh("${script} ${finalArgs.assetVersions} ${finalArgs.integritiesFile}")
-          } else {
-            sh("${script} ${finalArgs.assetVersions}")
-          }
+      }
+    }
+  }
+}
+
+def deployAssetsVersion(Map args) {
+  if (args.integritiesFile) {
+    stash(name: 'integrities', includes: args.integritiesFile)
+  }
+
+  inPod(containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:2be721c')]) {
+    def releaseProjectSubdir = '__release'
+    checkout([
+      $class: 'GitSCM',
+      branches: [[name: 'master']],
+      userRemoteConfigs: [[
+        url: 'git@github.com:salemove/release.git',
+        credentialsId: scm.userRemoteConfigs[0].credentialsId
+      ]],
+      extensions: [
+        [$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir],
+        [$class: 'CloneOption', noTags: true, shallow: true]
+      ]
+    ])
+
+    container('toolbox') {
+      stage ('Deploy to Acceptance Environment') {
+        def script = "${releaseProjectSubdir}/update_static_asset_versions"
+        if (args.integritiesFile) {
+          unstash('integrities')
+          sh("${script} ${args.version} ${args.integritiesFile}")
+        } else {
+          sh("${script} ${args.version}")
         }
       }
     }
