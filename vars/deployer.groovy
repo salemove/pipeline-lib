@@ -1,6 +1,10 @@
+import groovy.transform.Field
+
 import static com.salemove.Collections.addWithoutDuplicates
 import com.salemove.Deployer
 import com.salemove.deploy.Github
+
+@Field releaseProjectSubdir = '__release'
 
 def wrapPodTemplate(Map args = [:]) {
   // Left for backwards compatibility
@@ -70,60 +74,72 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
   Deployer.buildImageIfDoesNotExist(this, args.name, body)
 }
 
-def updateStaticAssets(Map args) {
+private def inToolbox(Map args = [:], Closure body) {
+  def defaultArgs = [
+    containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:2be721c')]
+  ]
+  def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
+  def finalArgs = defaultArgs << args << [containers: finalContainers]
+
+  inPod(finalArgs) {
+    checkout([
+      $class: 'GitSCM',
+      branches: [[name: 'master']],
+      userRemoteConfigs: [[
+        url: 'git@github.com:salemove/release.git',
+        credentialsId: scm.userRemoteConfigs[0].credentialsId
+      ]],
+      extensions: [
+        [$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir],
+        [$class: 'CloneOption', noTags: true, shallow: true]
+      ]
+    ])
+
+    container('toolbox') {
+      ansiColor('xterm') {
+        body()
+      }
+    }
+  }
+}
+
+def publishAssets(Map args) {
   def defaultArgs = [
     s3Bucket: 'libs.salemove.com'
   ]
   def finalArgs = defaultArgs << args
 
-  stash(name: 'assets', includes: "${finalArgs.assetsFolder}/**/*")
-  if (finalArgs.integritiesFile) {
-    stash(name: 'integrities', includes: finalArgs.integritiesFile)
-  }
+  stash(name: 'assets', includes: "${finalArgs.folder}/**/*")
 
   withCredentials([
     string(variable: 'assumer', credentialsId: 'asset-publisher-assumer-iam-role'),
     string(variable: 'publisher', credentialsId: 'asset-publisher-iam-role')
   ]) {
-    inPod(
-      containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:2be721c')],
-      annotations: [podAnnotation(key: 'iam.amazonaws.com/role', value: assumer)]
-    ) {
-      def releaseProjectSubdir = '__release'
-      checkout([
-        $class: 'GitSCM',
-        branches: [[name: 'master']],
-        userRemoteConfigs: [[
-          url: 'git@github.com:salemove/release.git',
-          credentialsId: scm.userRemoteConfigs[0].credentialsId
-        ]],
-        extensions: [
-          [$class: 'RelativeTargetDirectory', relativeTargetDir: releaseProjectSubdir],
-          [$class: 'CloneOption', noTags: true, shallow: true]
-        ]
-      ])
+    inToolbox(annotations: [podAnnotation(key: 'iam.amazonaws.com/role', value: assumer)]) {
+      unstash('assets')
 
-      container('toolbox') {
-        stage('Publish assets to S3') {
-          unstash('assets')
-
-          withEnv([
-            "S3_BUCKET=${finalArgs.s3Bucket}",
-            "DIST=${finalArgs.assetsFolder}"
-          ]) {
-            sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
-          }
-        }
-        stage ('Deploy to Acceptance Environment') {
-          def script = "${releaseProjectSubdir}/update_static_asset_versions"
-          if (finalArgs.integritiesFile) {
-            unstash('integrities')
-            sh("${script} ${finalArgs.assetVersions} ${finalArgs.integritiesFile}")
-          } else {
-            sh("${script} ${finalArgs.assetVersions}")
-          }
-        }
+      withEnv([
+        "S3_BUCKET=${finalArgs.s3Bucket}",
+        "DIST=${finalArgs.folder}"
+      ]) {
+        sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
       }
+    }
+  }
+}
+
+def deployAssetsVersion(Map args) {
+  if (args.integritiesFile) {
+    stash(name: 'integrities', includes: args.integritiesFile)
+  }
+
+  inToolbox {
+    def script = "${releaseProjectSubdir}/update_static_asset_versions"
+    if (args.integritiesFile) {
+      unstash('integrities')
+      sh("${script} ${args.version} ${args.integritiesFile}")
+    } else {
+      sh("${script} ${args.version}")
     }
   }
 }

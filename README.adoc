@@ -210,30 +210,43 @@ you've opened a PR with the Jenkinsfile changes described above.]
 footnote:[Ensure that `continuous-integration/jenkins/pr-merge` and
 `review/squash` are also checked.]
 
-==== `updateStaticAssets`
-:link-version-format: http://kubernetes.io/docs/user-guide/configmap/#creating-from-literal-values
+==== `publishAssets`
 
-`deployer.updateStaticAssets` can be used to upload static assets to S3 and
-deploy them to acceptance. It takes the following arguments:
+`deployer.publishAssets` uploads static assets to S3. It takes the following
+arguments:
 
-* `assetsFolder`: The path to a folder with distribution-ready (compiled,
+* `folder`: The path to a folder with distribution-ready (compiled,
   minified, etc) static assets. Relative to the current working directory.
-* `assetVersions`: The updated asset versions in the
-  {link-version-format}[literal ConfigMap format].
-* `integritiesFile`: Optional. Path to a JSON manifest of all the included
-  assets, including their integrities (hashes). Relative to the current working
-  directory.
 * `s3Bucket`: Optional. The name and optional path of the S3 bucket to upload
-  the files in `assetsFolder` to. Defaults to `libs.salemove.com`.
+  the files in `folder` to. Defaults to `libs.salemove.com`.
 
 Example:
 [source,groovy]
 ----
-deployer.updateStaticAssets(
-  assetsFolder: 'dist',
-  assetVersions: 'visitor-app.v1=507d427',
-  integritiesFile: 'integrities.json', // Optional
+deployer.publishAssets(
+  folder: 'dist',
   s3Bucket: 'your.s3.bucket/path' // Optional
+)
+----
+
+==== `deployAssetsVersion`
+:link-version-format: http://kubernetes.io/docs/user-guide/configmap/#creating-from-literal-values
+
+`deployer.deployAssetsVersion` updates the version of a group of assets and
+optionally their integrities in the "static-assets" ConfigMap in acceptance. It
+takes the following arguments:
+
+* `version`: The version to put into the ConfigMap in the
+  {link-version-format}[literal ConfigMap format].
+* `integritiesFile`: Optional. Path to a JSON manifest of the assets, including
+  their integrities (hashes). Relative to the current working directory.
+
+Example:
+[source,groovy]
+----
+deployer.deployAssetsVersion(
+  version: 'visitor-app.v1=507d427',
+  integritiesFile: 'integrities.json', // Optional
 )
 ----
 
