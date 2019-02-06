@@ -71,9 +71,14 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
 }
 
 def updateStaticAssets(Map args) {
-  stash(name: 'assets', includes: "${args.assetsFolder}/**/*")
-  if (args.integritiesFile) {
-    stash(name: 'integrities', includes: args.integritiesFile)
+  def defaultArgs = [
+    s3Bucket: 'libs.salemove.com'
+  ]
+  def finalArgs = defaultArgs << args
+
+  stash(name: 'assets', includes: "${finalArgs.assetsFolder}/**/*")
+  if (finalArgs.integritiesFile) {
+    stash(name: 'integrities', includes: finalArgs.integritiesFile)
   }
 
   withCredentials([
@@ -103,19 +108,19 @@ def updateStaticAssets(Map args) {
           unstash('assets')
 
           withEnv([
-            'S3_BUCKET=libs.salemove.com',
-            "DIST=${args.assetsFolder}"
+            "S3_BUCKET=${finalArgs.s3Bucket}",
+            "DIST=${finalArgs.assetsFolder}"
           ]) {
             sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
           }
         }
         stage ('Deploy to Acceptance Environment') {
           def script = "${releaseProjectSubdir}/update_static_asset_versions"
-          if (args.integritiesFile) {
+          if (finalArgs.integritiesFile) {
             unstash('integrities')
-            sh("${script} ${args.assetVersions} ${args.integritiesFile}")
+            sh("${script} ${finalArgs.assetVersions} ${finalArgs.integritiesFile}")
           } else {
-            sh("${script} ${args.assetVersions}")
+            sh("${script} ${finalArgs.assetVersions}")
           }
         }
       }
