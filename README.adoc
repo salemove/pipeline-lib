@@ -223,6 +223,8 @@ deploy them to acceptance. It takes the following arguments:
 * `integritiesFile`: Optional. Path to a JSON manifest of all the included
   assets, including their integrities (hashes). Relative to the current working
   directory.
+* `s3Bucket`: Optional. The name and optional path of the S3 bucket to upload
+  the files in `assetsFolder` to. Defaults to `libs.salemove.com`.
 
 Example:
 [source,groovy]
@@ -230,7 +232,8 @@ Example:
 deployer.updateStaticAssets(
   assetsFolder: 'dist',
   assetVersions: 'visitor-app.v1=507d427',
-  integritiesFile: 'integrities.json' // Optional
+  integritiesFile: 'integrities.json', // Optional
+  s3Bucket: 'your.s3.bucket/path' // Optional
 )
 ----
 
