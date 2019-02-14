@@ -22,10 +22,10 @@ spec:
       - name: deploy-pipeline-test
         resources:
           requests:
-            memory: "4Mi"
+            memory: "10Mi"
             cpu: "2m"
           limits:
-            memory: "10Mi"
+            memory: "30Mi"
             cpu: "2m"
         image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/deploy-pipeline-test:{{APP_VERSION}}'
         ports:
