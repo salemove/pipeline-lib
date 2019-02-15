@@ -127,6 +127,7 @@ The exact changes required depend on the project, but here's an example.
 +    env['runInKube'](
 +      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <6>
 +      command: './run_smoke_tests.sh',
++      name: 'call-router-deploy-test', // Optional. Default is based on kubernetesDeployment value
 +      overwriteEntrypoint: true, // Optional, defaults to `false` <7>
 +      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <8>
 +    )

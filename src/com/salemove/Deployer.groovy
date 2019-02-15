@@ -395,18 +395,19 @@ class Deployer implements Serializable {
     script.stage("Running automatic checks in ${env.displayName}") {
       automaticChecksFor(env.subMap(['name', 'domainName']) << [
         runInKube: { Map args ->
+          def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
           def defaultArgs = [
             image: "${dockerRegistryURI}/${image.id.replaceFirst(/:.*$/, '')}:${version}",
+            name: "${kubernetesDeployment}-checks-${uniqueShortID}",
             overwriteEntrypoint: false,
             additionalArgs: ''
           ]
           def finalArgs = defaultArgs << args
 
-          def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
           script.ansiColor('xterm') {
             script.sh(
               "${kubectlCmd} run" +
-              " ${kubernetesDeployment}-checks-${uniqueShortID}" +
+              " ${finalArgs.name}" +
               " --image='${finalArgs.image}'" +
               ' --restart=Never' +
               ' --attach' +
