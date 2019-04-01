@@ -109,14 +109,15 @@ def publishAssets(Map args) {
   ]
   def finalArgs = defaultArgs << args
 
-  stash(name: 'assets', includes: "${finalArgs.folder}/**/*")
+  def assetsStash = "assets-${UUID.randomUUID()}"
+  stash(name: assetsStash, includes: "${finalArgs.folder}/**/*")
 
   withCredentials([
     string(variable: 'assumer', credentialsId: 'asset-publisher-assumer-iam-role'),
     string(variable: 'publisher', credentialsId: 'asset-publisher-iam-role')
   ]) {
     inToolbox(annotations: [podAnnotation(key: 'iam.amazonaws.com/role', value: assumer)]) {
-      unstash('assets')
+      unstash(assetsStash)
 
       withEnv([
         "S3_BUCKET=${finalArgs.s3Bucket}",
@@ -129,14 +130,15 @@ def publishAssets(Map args) {
 }
 
 def deployAssetsVersion(Map args) {
+  def integritiesStash = "integrities-${UUID.randomUUID()}"
   if (args.integritiesFile) {
-    stash(name: 'integrities', includes: args.integritiesFile)
+    stash(name: integritiesStash, includes: args.integritiesFile)
   }
 
   inToolbox {
     def script = "${releaseProjectSubdir}/update_static_asset_versions"
     if (args.integritiesFile) {
-      unstash('integrities')
+      unstash(integritiesStash)
       sh("${script} ${args.version} ${args.integritiesFile}")
     } else {
       sh("${script} ${args.version}")
