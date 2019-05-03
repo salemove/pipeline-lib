@@ -1,17 +1,34 @@
+import org.yaml.snakeyaml.Yaml
 import static com.salemove.Collections.addWithoutDuplicates
 
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     cloud: 'CI',
     name: 'pipeline-build',
-    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.26-1-alpine')]
+    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.26-1-alpine')],
+    yaml: '''\
+      apiVersion: v1
+      kind: Pod
+      spec:
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                - key: role
+                  operator: In
+                  values:
+                  - jenkins
+    '''.stripIndent()
   ]
 
   // For containers, add the lists together, but remove duplicates by name,
   // giving precedence to the user specified args.
   def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
 
-  def finalArgs = defaultArgs << args << [containers: finalContainers]
+  def finalYaml = args.yaml ? addAffinity(from: defaultArgs.yaml, to: args.yaml) : defaultArgs.yaml
+  def finalArgs = defaultArgs << args << [containers: finalContainers, yaml: finalYaml]
 
   // Include a UUID to ensure that the label is unique for every build. This
   // way Jenkins will not re-use the pods for multiple builds and any changes
@@ -26,4 +43,20 @@ def call(Map args = [:], Closure body) {
       body()
     }
   }
+}
+
+private def addAffinity(Map args) {
+  def yaml = new Yaml()
+  def resultMap = (Map) yaml.load(args.to)
+  def fromMap = (Map) yaml.load(args.from)
+
+  if (resultMap?.spec) {
+    resultMap.spec.affinity = fromMap.spec.affinity
+  } else if (resultMap) {
+    resultMap.spec = fromMap.spec
+  } else {
+    resultMap = fromMap
+  }
+
+  yaml.dump(resultMap)
 }
