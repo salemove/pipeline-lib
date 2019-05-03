@@ -20,6 +20,10 @@ def call(Map args = [:], Closure body) {
                   operator: In
                   values:
                   - jenkins
+        tolerations:
+        - key: dedicated
+          value: jenkins
+          operator: Equal
     '''.stripIndent()
   ]
 
@@ -27,7 +31,7 @@ def call(Map args = [:], Closure body) {
   // giving precedence to the user specified args.
   def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
 
-  def finalYaml = args.yaml ? addAffinity(from: defaultArgs.yaml, to: args.yaml) : defaultArgs.yaml
+  def finalYaml = args.yaml ? addNodeSelectors(from: defaultArgs.yaml, to: args.yaml) : defaultArgs.yaml
   def finalArgs = defaultArgs << args << [containers: finalContainers, yaml: finalYaml]
 
   // Include a UUID to ensure that the label is unique for every build. This
@@ -45,13 +49,14 @@ def call(Map args = [:], Closure body) {
   }
 }
 
-private def addAffinity(Map args) {
+private def addNodeSelectors(Map args) {
   def yaml = new Yaml()
   def resultMap = (Map) yaml.load(args.to)
   def fromMap = (Map) yaml.load(args.from)
 
   if (resultMap?.spec) {
     resultMap.spec.affinity = fromMap.spec.affinity
+    resultMap.spec.tolerations = (resultMap.spec.tolerations ?: []) + fromMap.spec.tolerations
   } else if (resultMap) {
     resultMap.spec = fromMap.spec
   } else {
