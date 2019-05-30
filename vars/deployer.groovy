@@ -136,12 +136,14 @@ def deployAssetsVersion(Map args) {
   }
 
   inToolbox {
-    def script = "${releaseProjectSubdir}/update_static_asset_versions"
-    if (args.integritiesFile) {
-      unstash(integritiesStash)
-      sh("${script} ${args.version} ${args.integritiesFile}")
-    } else {
-      sh("${script} ${args.version}")
+    lock('acceptance-environment') {
+      def script = "${releaseProjectSubdir}/update_static_asset_versions"
+      if (args.integritiesFile) {
+        unstash(integritiesStash)
+        sh("${script} ${args.version} ${args.integritiesFile}")
+      } else {
+        sh("${script} ${args.version}")
+      }
     }
   }
 }
