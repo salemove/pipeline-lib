@@ -493,7 +493,14 @@ class Deployer implements Serializable {
         name: 'deployer',
         containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:327930e')],
         volumes: [script.configMapVolume(mountPath: kubeConfFolderPath, configMapName: 'kube-config')],
-        annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)]
+        annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)],
+        yaml: '''\
+          apiVersion: v1
+          kind: Pod
+          spec:
+            nodeSelector:
+              role: application
+        '''
       ) {
         git.checkoutVersionTag(version)
         body()
