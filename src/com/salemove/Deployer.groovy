@@ -383,7 +383,7 @@ class Deployer implements Serializable {
       script.echo('`inAcceptance` is deprecated. Please use `automaticChecksFor` instead.')
 
       script.stage('Running acceptance tests') {
-        inAcceptance()
+        inAcceptance.call()
       }
     }
 
@@ -393,7 +393,7 @@ class Deployer implements Serializable {
     }
 
     script.stage("Running automatic checks in ${env.displayName}") {
-      automaticChecksFor(env.subMap(['name', 'domainName']) << [
+      automaticChecksFor.call(env.subMap(['name', 'domainName']) << [
         runInKube: { Map args ->
           def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
           def defaultArgs = [
@@ -430,7 +430,7 @@ class Deployer implements Serializable {
         return
       }
 
-      def checklist = checklistFor(env.subMap(['name', 'domainName']))
+      def checklist = checklistFor.call(env.subMap(['name', 'domainName']))
       if (checklist.size() == 0) {
         script.input(question)
         return
