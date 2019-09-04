@@ -220,13 +220,15 @@ arguments:
   minified, etc) static assets. Relative to the current working directory.
 * `s3Bucket`: Optional. The name and optional path of the S3 bucket to upload
   the files in `folder` to. Defaults to `libs.salemove.com`.
+* `cacheMaxAge`: Optional. Cache-Control maximum age in seconds. Defaults to `31536000`.
 
 Example:
 [source,groovy]
 ----
 deployer.publishAssets(
   folder: 'dist',
-  s3Bucket: 'your.s3.bucket/path' // Optional
+  s3Bucket: 'your.s3.bucket/path', // Optional
+  cacheMaxAge: 31536000 // Optional
 )
 ----
 
