@@ -105,7 +105,8 @@ private def inToolbox(Map args = [:], Closure body) {
 
 def publishAssets(Map args) {
   def defaultArgs = [
-    s3Bucket: 'libs.salemove.com'
+    s3Bucket: 'libs.salemove.com',
+    cacheMaxAge: 31536000 // seconds
   ]
   def finalArgs = defaultArgs << args
 
@@ -121,7 +122,8 @@ def publishAssets(Map args) {
 
       withEnv([
         "S3_BUCKET=${finalArgs.s3Bucket}",
-        "DIST=${finalArgs.folder}"
+        "DIST=${finalArgs.folder}",
+        "CACHE_MAX_AGE=${finalArgs.cacheMaxAge}"
       ]) {
         sh("with-role ${publisher} ${releaseProjectSubdir}/publish_static_release")
       }
