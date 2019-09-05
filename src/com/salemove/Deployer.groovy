@@ -600,7 +600,15 @@ class Deployer implements Serializable {
     // Mark the current job's status as success, for the PR to be mergeable.
     github.setStatus(status: 'success', description: 'The PR has successfully been deployed')
 
-    git.finishMerge()
+    script.retry(3) {
+      try {
+        git.finishMerge()
+      } catch(e) {
+        script.echo("Merge failed with the following exception. Waiting a bit and trying again. ${e}!")
+        script.sleep(time: 5, unit: 'SECONDS')
+        throw(e)
+      }
+    }
   }
 
   private def pushDockerImage(String version) {
