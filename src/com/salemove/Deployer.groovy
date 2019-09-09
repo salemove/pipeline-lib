@@ -597,11 +597,11 @@ class Deployer implements Serializable {
   }
 
   private def mergeToMaster() {
-    // Mark the current job's status as success, for the PR to be mergeable.
-    github.setStatus(status: 'success', description: 'The PR has successfully been deployed')
-
     script.retry(3) {
       try {
+        // Mark the current job's status as success, for the PR to be mergeable.
+        github.setStatus(status: 'success', description: 'The PR has successfully been deployed')
+
         git.finishMerge()
       } catch(e) {
         script.echo("Merge failed with the following exception. Waiting a bit and trying again. ${e}!")
