@@ -491,7 +491,7 @@ class Deployer implements Serializable {
     script.withCredentials([script.string(credentialsId: 'eks-deployer-iam-role', variable: 'role')]) {
       script.inDockerAgent(
         name: 'deployer',
-        containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:327930e')],
+        containers: [script.interactiveContainer(name: containerName, image: 'salemove/jenkins-toolbox:a99ffb7')],
         volumes: [script.configMapVolume(mountPath: kubeConfFolderPath, configMapName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)],
         yaml: '''\

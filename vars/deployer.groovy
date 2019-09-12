@@ -76,7 +76,7 @@ def buildImageIfDoesNotExist(Map args, Closure body) {
 
 private def inToolbox(Map args = [:], Closure body) {
   def defaultArgs = [
-    containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:2be721c')]
+    containers: [interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:a99ffb7')]
   ]
   def finalContainers = addWithoutDuplicates((args.containers ?: []), defaultArgs.containers) { it.getArguments().name }
   def finalArgs = defaultArgs << args << [containers: finalContainers]
