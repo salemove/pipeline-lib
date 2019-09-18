@@ -400,25 +400,6 @@ Ruby.
 WARNING: Only specify the `name`, `workingDir`, `command`, `args`, and/or
 `ttyEnabled` fields for `agentContainer` if you know what you're doing.
 
-
-=== `toolboxContainer`
-:link-jenkins-toolbox: https://github.com/salemove/jenkins-toolbox
-
-A {link-pod-template}[`containerTemplate`] wrapper for toolbox container that
-will have pipeline steps executed in them. Pipeline steps can be executed in the container by wrapping them
-with `container`. Contains latest version of {link-jenkins-toolbox}[`salemove/jenkins-toolbox`].
-
-Example:
-[source,groovy]
-----
-inPod(containers: [toolboxContainer()]) {
-  checkout(scm)
-  container('toolbox') {
-    sh('kubectl exec -it <pod> <cmd>')
-  }
-}
-----
-
 === `withResultReporting`
 :link-mailer-plugin: https://wiki.jenkins.io/display/JENKINS/Mailer
 
