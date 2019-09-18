@@ -149,3 +149,56 @@ def deployAssetsVersion(Map args) {
     }
   }
 }
+
+def publishDocs(Map args) {
+  def branchName = 'gitbooks'
+  def docStash = 'doc-stash'
+  stash(name: docStash, includes: args.source)
+
+  stage('Publish docs') {
+    inPod(containers: [
+      interactiveContainer(name: 'toolbox', image: 'salemove/jenkins-toolbox:a99ffb7')
+    ]) {
+      checkout([
+        $class: 'GitSCM',
+        branches: [[name: branchName]],
+        userRemoteConfigs: [[
+          url: 'git@github.com:salemove/salemove.github.io.git',
+          credentialsId: scm.userRemoteConfigs[0].credentialsId
+        ]]
+      ])
+
+      container('toolbox') {
+        sshagent([scm.userRemoteConfigs[0].credentialsId]) {
+          sh("""\
+            # Enable GitHub to link new commits to the sm-deployer user.
+            git config user.name 'sm-deployer'
+            git config user.email 'support@salemove.com'
+
+            git checkout -b ${branchName}
+          """.stripIndent())
+
+          dir('tmp') {
+            unstash(docStash)
+          }
+
+          sh("mkdir -p \$(dirname ${args.destination})")
+          sh("mv tmp/${args.source} ${args.destination}")
+
+          try {
+            sh("""\
+              git add ${args.destination}
+              git commit -F- <<EOF && git push -u origin ${branchName}
+              Publish documentation
+
+              Automatically created using publishDocs().
+              EOF
+            """.stripIndent())
+          } catch(e) {
+            sh("echo 'Creating documentation commit failed. Probably nothing to commit.'")
+          }
+        }
+      }
+    }
+  }
+}

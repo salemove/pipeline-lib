@@ -477,6 +477,23 @@ withResultReporting(
 }
 ----
 
+==== `publishDocs`
+
+`deployer.publishDocs` publishes docs. It takes the following arguments:
+
+* `source`: The source file which must be in the working directory where this
+  function is called. E.g. `quicksight/engagements.md`.
+* `destination`: File name of the published asset. E.g.
+  `quicksight/auto-generated/engagements.md`.
+
+Example:
+[source,groovy]
+----
+deployer.publishDocs(
+  source: 'quicksight/engagements.md',
+  destination: 'quicksight/auto-generated/engagements.md'
+)
+----
 
 == Developing
 
