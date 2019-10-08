@@ -1,5 +1,6 @@
 package com.salemove
 
+import org.yaml.snakeyaml.Yaml
 import com.salemove.Datadog
 import com.salemove.deploy.Args
 import com.salemove.deploy.Git
@@ -496,13 +497,22 @@ class Deployer implements Serializable {
         containers: [script.toolboxContainer(name: containerName)],
         volumes: [script.configMapVolume(mountPath: kubeConfFolderPath, configMapName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)],
-        nodeSelector: 'role:application',
-        yaml: Datadog.podYAML
+        yaml: addNodeSelector(Datadog.podYAML, [role: 'application'])
       ) {
         git.checkoutVersionTag(version)
         body()
       }
     }
+  }
+
+  @NonCPS
+  private def addNodeSelector(String podYAML, Map nodeSelector) {
+    def serializer = new Yaml()
+    def resultMap = (Map) serializer.load(podYAML)
+
+    resultMap.spec.nodeSelector = nodeSelector
+
+    serializer.dump(resultMap)
   }
 
   private def withRollbackManagement(Closure body) {
