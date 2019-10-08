@@ -1,5 +1,6 @@
 package com.salemove
 
+import com.salemove.Datadog
 import com.salemove.deploy.Args
 import com.salemove.deploy.Git
 import com.salemove.deploy.Github
@@ -61,7 +62,7 @@ class Deployer implements Serializable {
 
   private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
     checklistFor, kubernetesNamespace, notify, git, github, globalLockConfigured,
-    deploymentUpdateTimeout
+    deploymentUpdateTimeout, datadog
   Deployer(script, Map args) {
     def defaultArgs = [
       kubernetesNamespace: 'default',
@@ -82,6 +83,7 @@ class Deployer implements Serializable {
     this.notify = new Notify(script, finalArgs)
     this.git = new Git(script)
     this.github = new Github(script, finalArgs)
+    this.datadog = new Datadog(script)
   }
 
   static def isDeploy(script) {
@@ -494,13 +496,8 @@ class Deployer implements Serializable {
         containers: [script.toolboxContainer(name: containerName)],
         volumes: [script.configMapVolume(mountPath: kubeConfFolderPath, configMapName: 'kube-config')],
         annotations: [script.podAnnotation(key: 'iam.amazonaws.com/role', value: script.role)],
-        yaml: '''\
-          apiVersion: v1
-          kind: Pod
-          spec:
-            nodeSelector:
-              role: application
-        '''
+        nodeSelector: 'role:application',
+        yaml: Datadog.podYAML
       ) {
         git.checkoutVersionTag(version)
         body()
@@ -515,7 +512,11 @@ class Deployer implements Serializable {
         .groupBy { it.lockedResource }
         .collectEntries { lockedResource, rollbacksForResource ->
           [(lockedResource): {
+            def timeStart = new Date()
             script.lock(lockedResource) {
+              def timeEnd = new Date()
+              recordLockWaitDuration(lockedResource, timeStart, timeEnd)
+
               executeRollbacks(rollbacksForResource)
             }
           }]
@@ -543,7 +544,11 @@ class Deployer implements Serializable {
         }
       }
 
+      def timeStart = new Date()
       script.lock(resource) {
+        def timeEnd = new Date()
+        recordLockWaitDuration(resource, timeStart, timeEnd)
+
         try {
           withLockBody(deploy, rollBackForLockedResource)
         } catch(e) {
@@ -561,6 +566,20 @@ class Deployer implements Serializable {
       github.setStatus(status: 'failure', description: 'Deploy either failed or was aborted')
       notify.deployFailedOrAborted()
       throw(e)
+    }
+  }
+
+  private def recordLockWaitDuration(resource, Date start, Date end) {
+    def resourceNames = [resource.resource] +
+      (resource['extra'] ?: []).collect { it.resource }
+
+    resourceNames.each { name ->
+      datadog.sendDuration(
+        nameSuffix: 'deploy.lock.wait.duration',
+        start: start,
+        end: end,
+        tags: ["resource:${name}"]
+      )
     }
   }
 
