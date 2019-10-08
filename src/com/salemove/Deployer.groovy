@@ -527,7 +527,7 @@ class Deployer implements Serializable {
       }
     }
 
-    def withLock = { String resource, Closure withLockBody ->
+    def withLock = { resource, Closure withLockBody ->
       def deploy = { Map args ->
         rollbacks = [[
           lockedResource: resource,
