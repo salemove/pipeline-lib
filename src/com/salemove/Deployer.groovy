@@ -624,7 +624,34 @@ class Deployer implements Serializable {
   }
 
   private def mergeToMaster() {
+    def attempt = 0
+    def abortException
+
     script.retry(3) {
+      attempt++
+
+      if (abortException) {
+        // Avoid retrying if the user has intentionally aborted the execution.
+        throw(abortException)
+      } else if (attempt > 1) {
+        notify.inputRequired()
+        try {
+          script.input(
+            'The merge failed. There is information about the reason above. It could have failed ' +
+            'due to serious problems, like missing some changes that have been merged to master ' +
+            'during the deploy. If that is the case, then please click Abort and your changes will ' +
+            'be rolled back in all environments. However, the merge could also have failed because ' +
+            'of a fixable issue, like not having a required review or missing some status checks. ' +
+            'If that is the case, then please fix the problem and click Proceed to try again.'
+          )
+        } catch(e) {
+          // Set abortException so we know that the user intentionally aborted
+          // the execution and we don't keep retrying when that's the case.
+          abortException = e
+          throw(e)
+        }
+      }
+
       try {
         // Mark the current job's status as success, for the PR to be mergeable.
         github.setStatus(status: 'success', description: 'The PR has successfully been deployed')
