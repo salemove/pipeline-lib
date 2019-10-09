@@ -136,9 +136,7 @@ class Deployer implements Serializable {
             )
             waitForValidationIn(envs.prodUS)
             waitForValidationIn(envs.prodEU)
-            withLock(testEnvLock()) { deployWithATLock, _ ->
-              deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
-            }
+            deploy(env: envs.acceptance, version: version, runAutomaticChecks: false)
             mergeToMaster()
           }
         }
