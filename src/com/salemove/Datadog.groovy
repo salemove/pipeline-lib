@@ -64,7 +64,7 @@ class Datadog {
   private def timeDiffMillis(Date start, Date end) {
     use(groovy.time.TimeCategory) {
       def duration = end - start
-      return duration.millis
+      return duration.toMilliseconds()
     }
   }
 }
