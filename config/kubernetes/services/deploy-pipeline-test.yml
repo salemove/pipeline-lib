@@ -8,6 +8,7 @@ spec:
   ports:
   - port: 80
     protocol: TCP
+    name: tcp
     targetPort: 80
   selector:
     app: deploy-pipeline-test
