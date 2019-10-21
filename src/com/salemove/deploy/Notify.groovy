@@ -12,22 +12,20 @@ class Notify implements Serializable {
   }
 
   def envDeployingForFirstTime(env, version) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "${deployingUser()} is creating ${deployedResouce()} with version `${version}`" +
         " in ${env.displayName}. This is the first deploy for this application."
     ])
   }
   def envDeployingVersionedForFirstTime(env, version) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "${deployingUser()} is creating ${deployedResouce()} with version `${version}`" +
         " in ${env.displayName}. This is the first versioned deploy for this application."
     ])
   }
 
   def prodDeploying(version) {
-    sendSlack([
-      slackChannel: '#production',
-    ], [
+    sendSlack('#production', [
       message: "${deployingUser()} is updating ${deployedResouce()} to version `${version}`" +
         ' in production.'
     ])
@@ -36,26 +34,26 @@ class Notify implements Serializable {
     def rollbackLink = env.name == 'acceptance' ?  '' :
       " (<${rollbackURL(env, rollbackVersion, repository)}|roll back>)"
 
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "${deployingUser()} is updating ${deployedResouce()} to version `${version}`" +
         " in ${env.displayName}. The current version is `${rollbackVersion}`${rollbackLink}."
     ])
   }
   def envDeploySuccessful(env, version) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       color: 'good',
       message: "Successfully updated ${deployedResouce()} to version `${version}`" +
         " in ${env.displayName}."
     ])
   }
   def envRollingBack(env, rollbackVersion) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "Rolling back ${deployedResouce()} to version `${rollbackVersion}`" +
         " in ${env.displayName}."
     ])
   }
   def envRollbackFailed(env, rollbackVersion) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       color: 'danger',
       replyBroadcast: true,
       message: "Failed to roll back ${deployedResouce()} to version `${rollbackVersion}`" +
@@ -63,12 +61,12 @@ class Notify implements Serializable {
     ])
   }
   def envDeletingDeploy(env) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "Rolling back ${deployedResouce()} by deleting it in ${env.displayName}."
     ])
   }
   def envDeployDeletionFailed(env) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       color: 'danger',
       replyBroadcast: true,
       message: "Failed to roll back ${deployedResouce()} by deleting it" +
@@ -76,12 +74,12 @@ class Notify implements Serializable {
     ])
   }
   def envUndoingDeploy(env) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       message: "Undoing update to ${deployedResouce()} in ${env.displayName}."
     ])
   }
   def envUndoFailed(env) {
-    sendSlack(env, [
+    sendSlack(env.slackChannel, [
       color: 'danger',
       replyBroadcast: true,
       message: "Failed to undo update to ${deployedResouce()} in ${env.displayName}." +
@@ -110,17 +108,17 @@ class Notify implements Serializable {
     )
   }
 
-  private def sendSlack(env, Map args) {
+  private def sendSlack(slackChannel, Map args) {
     // The << operator mutates the left-hand map. Start with an empty map ([:])
     // to avoid mutating user-provided object.
     def resp = script.slackSend([:] << args << [
-      channel: threadIds[env.slackChannel] ?: env.slackChannel,
+      channel: threadIds[slackChannel] ?: slackChannel,
       message: "${args.message}" +
         "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>" +
         "\nOpen in <${script.RUN_DISPLAY_URL}|Blue Ocean> or <${script.BUILD_URL}/console|Old UI>"
     ])
-    if (!threadIds[env.slackChannel]) {
-      threadIds[env.slackChannel] = resp.threadId
+    if (!threadIds[slackChannel]) {
+      threadIds[slackChannel] = resp.threadId
     }
   }
 
