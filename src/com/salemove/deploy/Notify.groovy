@@ -134,7 +134,7 @@ class Notify implements Serializable {
   }
 
   private def deployedResouce() {
-    "deployment/${kubernetesDeployment}" +
+    "`deploy/${kubernetesDeployment}`" +
       (kubernetesNamespace == 'default' ? '' : " in ${kubernetesNamespace} namespace")
   }
 
