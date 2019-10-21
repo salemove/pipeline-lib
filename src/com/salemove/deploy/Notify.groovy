@@ -24,6 +24,14 @@ class Notify implements Serializable {
     ])
   }
 
+  def prodDeploying(version) {
+    sendSlack([
+      slackChannel: '#production',
+    ], [
+      message: "${deployingUser()} is updating ${deployedResouce()} to version `${version}`" +
+        ' in production.'
+    ])
+  }
   def envDeploying(env, version, rollbackVersion, repository) {
     def rollbackLink = env.name == 'acceptance' ?  '' :
       " (<${rollbackURL(env, rollbackVersion, repository)}|roll back>)"

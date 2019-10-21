@@ -130,6 +130,7 @@ class Deployer implements Serializable {
             github.checkPRMergeable(notifyOnInput: false)
             deploy(env: envs.beta, version: version)
             waitForValidationIn(envs.beta)
+            notify.prodDeploying(version)
             script.parallel(
               US: { deploy(env: envs.prodUS, version: version) },
               EU: { deploy(env: envs.prodEU, version: version) }
