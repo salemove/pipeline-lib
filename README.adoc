@@ -514,6 +514,55 @@ deployer.publishDocs(
 )
 ----
 
+=== `ansiblePlaybookWithResults` and `buildWithResults`
+
+Two wrappers around `ansiblePlaybook()` and `build()` pipeline steps respectively,
+designed to obtain variables, registered by the Ansible playbook.
+[source,groovy]
+----
+def buildResult, ansibleVars = buildWithResults(
+  job: 'ansible/run-playbook',
+  parameters: [
+    string(name: 'playbook', value: 'db-provision-hosts.yml'),
+    // other parameters
+  ]
+)
+----
+
+The above syntax expects that the `ansible/run-playbook` Jenkins job invokes
+`ansiblePlaybookWithResults()` when running the playbook (instead of the standard
+`ansiblePlaybook()`). This ensures the results are passed within build variables
+in serialised form and can be later deserialised by `buildWithResults()` and
+returned as the second element of the returning tuple.
+
+Registering variables is done in Ansible by calling `register-jenkins-variable`
+role. There are two ways of doing so: directly or from a task.
+[source,yaml]
+----
+  roles:
+    - role: register-jenkins-variable
+      jenkins_var_name: 'var1'
+      jenkins_var_value: "value1"
+  tasks:
+    - name: Save IP of DB master for Jenkins
+      include_role:
+        name: register-jenkins-variable
+      vars:
+        jenkins_var_name: 'var2'
+        jenkins_var_value: "variable2"
+----
+
+With the given variables registered by the Ansible playbook, the following code
+will print `value1` and `value2`:
+[source,groovy]
+----
+def buildResult, ansibleVars = buildWithResults(
+  // build parameters
+  )
+echo(ansibleVars.var1)
+echo(ansibleVars.var2)
+----
+
 == Developing
 
 Guard is used for providing a preview of the documentation. Run the following
