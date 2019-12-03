@@ -9,5 +9,5 @@ def call(Map args = [:]) {
 
   def slurper = new JsonSlurperClassic()
   def ansibleVars = slurper.parseText(ansibleVarsJson)
-  return [buildResult, ansibleVars]
+  return [ansibleVars, buildResult]
 }

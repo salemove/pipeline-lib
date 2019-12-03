@@ -520,7 +520,9 @@ Two wrappers around `ansiblePlaybook()` and `build()` pipeline steps respectivel
 designed to obtain variables, registered by the Ansible playbook.
 [source,groovy]
 ----
-def buildResult, ansibleVars = buildWithResults(
+def ansibleVars
+def buildResult
+(ansibleVars, buildResult) = buildWithResults(
   job: 'ansible/run-playbook',
   parameters: [
     string(name: 'playbook', value: 'db-provision-hosts.yml'),
@@ -533,7 +535,8 @@ The above syntax expects that the `ansible/run-playbook` Jenkins job invokes
 `ansiblePlaybookWithResults()` when running the playbook (instead of the standard
 `ansiblePlaybook()`). This ensures the results are passed within build variables
 in serialised form and can be later deserialised by `buildWithResults()` and
-returned as the second element of the returning tuple.
+returned as the first element of the returning tuple. The second element is
+optional and left for backward compatibility.
 
 Registering variables is done in Ansible by calling `register-jenkins-variable`
 role. There are two ways of doing so: directly or from a task.
@@ -556,7 +559,8 @@ With the given variables registered by the Ansible playbook, the following code
 will print `value1` and `value2`:
 [source,groovy]
 ----
-def buildResult, ansibleVars = buildWithResults(
+def ansibleVars
+(ansibleVars) = buildWithResults(
   // build parameters
   )
 echo(ansibleVars.var1)
