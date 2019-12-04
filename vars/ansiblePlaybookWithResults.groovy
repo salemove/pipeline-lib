@@ -5,6 +5,7 @@ def call(Map args = [:], String jenkinsVarsDir = 'jenkins-variables') {
 
   echo("Loading registered variables from Ansible...")
   def vars = [:]
+  sh('pwd')
   varNames = sh(
     script: "ls ${jenkinsVarsDir}",
     returnStdout: true
