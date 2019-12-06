@@ -6,7 +6,7 @@ def call(Map args = [:], String jenkinsVarsDir = 'jenkins-variables') {
   echo("Loading registered variables from Ansible...")
   def vars = [:]
   varNames = sh(
-    script: "ls ${jenkinsVarsDir}",
+    script: "ls ${jenkinsVarsDir} 2>/dev/null || true",
     returnStdout: true
   ).trim().split()
   varNames.each {
