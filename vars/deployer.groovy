@@ -51,6 +51,7 @@ def wrapProperties(providedProperties = []) {
     pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
     [
       $class: 'DatadogJobProperty',
+      enableProperty: true,
       tagProperties: tags.join("\n")
     ]
   ]
