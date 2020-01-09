@@ -5,7 +5,7 @@ def call(Map args = [:], Closure body) {
   def defaultArgs = [
     cloud: 'CI',
     name: 'pipeline-build',
-    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.29-1-alpine')],
+    containers: [agentContainer(image: 'jenkins/jnlp-slave:3.36-2-alpine')],
     yaml: '''\
       apiVersion: v1
       kind: Pod
