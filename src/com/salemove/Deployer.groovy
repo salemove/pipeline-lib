@@ -137,7 +137,9 @@ class Deployer implements Serializable {
             )
             waitForValidationIn(envs.prodUS)
             waitForValidationIn(envs.prodEU)
-            deploy(env: envs.acceptance, version: version, runAutomaticChecks: false)
+            withLock(testEnvLock(onlyLocal: true)) { deployWithATLock, _ ->
+              deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
+            }
             mergeToMaster()
           }
         }
@@ -673,23 +675,26 @@ class Deployer implements Serializable {
     }
   }
 
-  private def testEnvLock() {
-    envLock('acceptance-environment')
+  private def testEnvLock(Map args = [:]) {
+    envLock('acceptance-environment', args)
   }
-  private def nonTestEnvLock() {
-    envLock('beta-and-prod-environments')
+  private def nonTestEnvLock(Map args = [:]) {
+    envLock('beta-and-prod-environments', args)
   }
-  private def envLock(String envName) {
+  private def envLock(String envName, Map args) {
     def localLock = "${kubernetesDeployment}-${kubernetesNamespace}-${envName}"
-    if (globalLockRequired()) {
+    if (globalLockRequired(args)) {
       [resource: localLock, extra: [[resource: envName]]]
     } else {
       [resource: localLock]
     }
   }
-  private def globalLockRequired() {
+  private def globalLockRequired(args) {
     // This assumes that the arguments have already been validated
-    globalLockConfigured && getTriggerArgs(script) != Args.noGlobalLock
+
+    globalLockConfigured && // Configuration from Jenkinsfile
+      getTriggerArgs(script) != Args.noGlobalLock && // !deploy PR comment parameter
+      !args.onlyLocal // Code override
   }
   private static def getTriggerArgs(script) {
     def triggerCause = getTriggerCause(script)
