@@ -15,7 +15,7 @@ def actualResponse = { envName, domainName ->
   def response
   container('deployer-container') {
     response = sh(
-      script: "curl -H 'Host: ${projectName}.${domainName}' gateway.${domainName}",
+      script: "curl -H 'Host: ${projectName}.${domainName}' https://gateway.${domainName}",
       returnStdout: true
     ).trim()
   }
