@@ -44,7 +44,9 @@ def call(Map args = [:], Closure body) {
     label: podLabel,
   ]) {
     node(podLabel) {
-      body()
+      wrap([$class: 'TimestamperBuildWrapper']) {
+        body()
+      }
     }
   }
 }
