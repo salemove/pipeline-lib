@@ -6,6 +6,7 @@ def call(Map args = [:], Closure body) {
     cloud: 'CI',
     name: 'pipeline-build',
     containers: [agentContainer(image: 'jenkins/jnlp-slave:3.36-2-alpine')],
+    inheritFrom: '',
     yaml: '''\
       apiVersion: v1
       kind: Pod
