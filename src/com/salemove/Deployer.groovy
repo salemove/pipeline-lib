@@ -61,7 +61,7 @@ class Deployer implements Serializable {
   private static final dockerRegistryCredentialsID = 'ecr:us-east-1:ecr-docker-push'
   private static final defaultNamespace = 'default'
 
-  private def script, kubernetesDeployment, image, inAcceptance, automaticChecksFor,
+  private def script, kubernetesDeployment, image, inAcceptance, preDeploymentChecksFor, automaticChecksFor,
     checklistFor, kubernetesNamespace, notify, git, github, globalLockConfigured,
     deploymentUpdateTimeout, datadog
   Deployer(script, Map args) {
@@ -76,6 +76,8 @@ class Deployer implements Serializable {
     this.kubernetesDeployment = finalArgs.kubernetesDeployment
     this.image = finalArgs.image
     this.inAcceptance = finalArgs.inAcceptance
+
+    this.preDeploymentChecksFor = finalArgs.preDeploymentChecksFor
     this.automaticChecksFor = finalArgs.automaticChecksFor
     this.checklistFor = finalArgs.checklistFor
     this.kubernetesNamespace = finalArgs.kubernetesNamespace
@@ -326,6 +328,10 @@ class Deployer implements Serializable {
 
     script.stage("Deploying to ${env.displayName}") {
       script.container(containerName) {
+        if (finalArgs.runAutomaticChecks) {
+          runPreDeploymentChecks(kubectlCmd, env, version)
+        }
+
         if (hasExistingDeployment(kubectlCmd)) {
           def rollbackVersion = getCurrentVersion(kubectlCmd)
           if (rollbackVersion) {
@@ -363,6 +369,7 @@ class Deployer implements Serializable {
             }
           }
           notify.envDeploySuccessful(env, version)
+
           if (finalArgs.runAutomaticChecks) {
             runAutomaticChecks(kubectlCmd, env, version)
           }
@@ -377,6 +384,21 @@ class Deployer implements Serializable {
     }
 
     return rollBack
+  }
+
+  private def runPreDeploymentChecks(kubectlCmd, env, version) {
+    if (!preDeploymentChecksFor) {
+      script.echo('No pre-deployment checks are defined for this job, skipping.')
+      return
+    }
+
+    script.stage("Running pre-deployment checks in ${env.displayName}") {
+      preDeploymentChecksFor.call(env.subMap(['name', 'domainName']) << [
+        runInKube: { Map args -> runInKube(kubectlCmd, version, args) },
+        version: version,
+        kubectlCmd: kubectlCmd
+      ])
+    }
   }
 
   private def runAutomaticChecks(kubectlCmd, env, version) {
@@ -398,31 +420,41 @@ class Deployer implements Serializable {
 
     script.stage("Running automatic checks in ${env.displayName}") {
       automaticChecksFor.call(env.subMap(['name', 'domainName']) << [
-        runInKube: { Map args ->
-          def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
-          def defaultArgs = [
-            image: "${dockerRegistryURI}/${image.id.replaceFirst(/:.*$/, '')}:${version}",
-            name: "${kubernetesDeployment}-checks-${uniqueShortID}",
-            overwriteEntrypoint: false,
-            additionalArgs: ''
-          ]
-          def finalArgs = defaultArgs << args
-
-          script.ansiColor('xterm') {
-            script.sh(
-              "${kubectlCmd} run" +
-              " ${finalArgs.name}" +
-              " --image='${finalArgs.image}'" +
-              ' --restart=Never' +
-              ' --attach' +
-              ' --rm' +
-              " ${finalArgs.additionalArgs}" +
-              " ${finalArgs.overwriteEntrypoint ? '--command' : ''}" +
-              " -- ${finalArgs.command}"
-            )
-          }
-        }
+        runInKube: { Map args -> runInKube(kubectlCmd, version, args) },
+        version: version,
+        kubectlCmd: kubectlCmd
       ])
+    }
+  }
+
+  private def runInKube(kubectlCmd, version, Map args) {
+    def uniqueShortID = UUID.randomUUID().toString().replaceFirst(/^.*-/, '')
+
+    def defaultArgs = [
+      image: "${dockerRegistryURI}/${image.id.replaceFirst(/:.*$/, '')}:${version}",
+      name: "${kubernetesDeployment}-checks-${uniqueShortID}",
+      overwriteEntrypoint: false,
+      additionalArgs: '',
+      returnStdout: false,
+      returnStatus: false
+    ]
+
+    def finalArgs = defaultArgs << args
+
+    script.ansiColor('xterm') {
+      script.sh(
+        script: "${kubectlCmd} run" +
+          " ${finalArgs.name}" +
+          " --image='${finalArgs.image}'" +
+          ' --restart=Never' +
+          ' --attach' +
+          ' --rm' +
+          " ${finalArgs.additionalArgs}" +
+          " ${finalArgs.overwriteEntrypoint ? '--command' : ''}" +
+          " -- ${finalArgs.command}",
+        returnStatus: finalArgs.returnStatus,
+        returnStdout: finalArgs.returnStdout
+      )
     }
   }
 

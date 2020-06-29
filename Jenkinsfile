@@ -61,6 +61,13 @@ withResultReporting(slackChannel: '#tm-inf') {
           error("Expected response to be \"${expectation}\", but was \"${response}\"")
         }
       },
+      preDeploymentChecksFor: { env ->
+        if (env.name == 'acceptance') {
+          env['runInKube'](
+            command: "/bin/sh -c 'test \"${buildVersion}\" = \"\$BUILD_VALUE\" && echo OK'"
+          )
+        }
+      },
       automaticChecksFor: { env ->
         def deployVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
         env['runInKube'](
