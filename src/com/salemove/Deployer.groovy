@@ -13,7 +13,7 @@ class Deployer implements Serializable {
     \A
     \s*            # Allow optional whitespace before the command
     !deploy
-    (?:            # Don't capture the whitespace before arguments
+    (?:            # Don`t capture the whitespace before arguments
       \s+          # Force whitespace between command and arguments
       (?<args>.*?) # Capture arguments with group named "args", non-greedy to avoid capturing trailing whitespace
     )?             # Arguments are optional
