@@ -133,12 +133,22 @@ class Deployer implements Serializable {
             deploy(env: envs.beta, version: version)
             waitForValidationIn(envs.beta)
             notify.prodDeploying(version)
-            script.parallel(
-              US: { deploy(env: envs.prodUS, version: version) },
-              EU: { deploy(env: envs.prodEU, version: version) }
-            )
-            waitForValidationIn(envs.prodUS)
-            waitForValidationIn(envs.prodEU)
+
+            if (!preDeploymentChecksFor) {
+              script.parallel(
+                US: { deploy(env: envs.prodUS, version: version) },
+                EU: { deploy(env: envs.prodEU, version: version) }
+              )
+              waitForValidationIn(envs.prodUS)
+              waitForValidationIn(envs.prodEU)
+            } else {
+              deploy(env: envs.prodUS, version: version)
+              waitForValidationIn(envs.prodUS)
+
+              deploy(env: envs.prodEU, version: version)
+              waitForValidationIn(envs.prodEU)
+            }
+
             withLock(testEnvLock(onlyLocal: true)) { deployWithATLock, _ ->
               deployWithATLock(env: envs.acceptance, version: version, runAutomaticChecks: false)
             }
