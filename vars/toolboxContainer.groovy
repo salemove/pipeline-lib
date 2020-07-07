@@ -1,7 +1,7 @@
 def call(Map args = [:]) {
   def defaultArgs = [
     name: 'toolbox',
-    image: 'salemove/jenkins-toolbox:9ac7119'
+    image: 'salemove/jenkins-toolbox:dc01e55'
   ]
 
   interactiveContainer(defaultArgs << args)
