@@ -95,6 +95,7 @@ Or wrap an existing `properties` call with the provided wrapper:
 ==== Enabling deploy on comment trigger
 :link-using-libraries: https://jenkins.io/doc/book/pipeline/shared-libraries/#using-libraries
 :link-timeout-docs: https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#timeout-enforce-time-limit
+:link-sh-docs: https://www.jenkins.io/doc/pipeline/steps/workflow-durable-task-step/#sh-shell-script
 
 The exact changes required depend on the project, but here's an example.
 [source,diff]
@@ -123,33 +124,61 @@ The exact changes required depend on the project, but here's an example.
 +  kubernetesDeployment: 'call-router',
 +  lockGlobally: true, // Optional, defaults to `true` <4>
 +  deploymentUpdateTimeout: [time: 10, unit: 'MINUTES'], // Optional, defaults to 10 minutes <5>
++  preDeploymentChecksFor: { env -> // Optional, allows running some code before deploying new version of the image
++    echo "Running pre-deployment checks for version ${env.version} in environment ${env.name}"
++
++    // env['runInKube'] provides a wrapper function around `kubectl run` command.
++    def exitStatus = env['runInKube'](
++      image: "662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:${env.version}", // <6>
++      command: './preview-db-migration.sh',
++      name: 'call-router-deploy-test', // Optional. Default is based on kubernetesDeployment value
++      overwriteEntrypoint: true, // Optional, defaults to `false` <7>
++      additionalArgs: '--env="FOO=bar" --port=12345', // Optional <8>
++      returnStdout: false, // Optional <9>
++      returnStatus: true // Optional <9>
++    )
++
++    // `kubectl run` has its own limitation so you if you need better flexibility,
++    // you can use `env.kubectlCmd` variable to run arbitrary commands
++    // in the current Kubernetes environment:
++    def configValue = sh(
++      script: "${env.kubectlCmd} get configmap my-config -o jsonpath={.data.key}",
++      returnStdout: true
++    ).trim()
++
++    if (configValue != "OK") {
++      throw new Exception("Pre-deployment check failed").
++    }
++  },
 +  automaticChecksFor: { env ->
 +    env['runInKube'](
 +      image: '662491802882.dkr.ecr.us-east-1.amazonaws.com/smoke-test-repo:latest', // <6>
 +      command: './run_smoke_tests.sh',
 +      name: 'call-router-deploy-test', // Optional. Default is based on kubernetesDeployment value
 +      overwriteEntrypoint: true, // Optional, defaults to `false` <7>
-+      additionalArgs: '--env="FOO=bar" --port=12345' // Optional <8>
++      additionalArgs: '--env="FOO=bar" --port=12345', // Optional <8>
++      returnStdout: false, // Optional <9>
++      returnStatus: true // Optional <9>
 +    )
 +    if (env.name == 'acceptance') {
 +      runAcceptanceTests(
 +        driver: 'chrome',
 +        visitorApp: 'v2',
-+        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <9>
++        suite: 'acceptance_test_pattern[lib/engagement/omnicall/.*_spec.rb]', // <10>
 +        slackChannel: '#tm-engage,
 +        parallelTestProcessors: 1
 +      )
 +    }
 +  },
 +  checklistFor: { env ->
-+    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <10>
-+    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <11>
++    def dashboardURL = "https://app.datadoghq.com/dash/206940?&tpl_var_KubernetesCluster=${env.name}" // <11>
++    def logURL = "https://logs.${env.domainName}/app/kibana#/discover?_g=" + // <12>
 +      '(time:(from:now-30m,mode:quick,to:now))&_a=' +
 +      '(query:(language:lucene,query:\'application:call_router+AND+level:error\'))'
 +
 +    [[
-+      name: 'dashboard', // <12>
-+      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <13>
++      name: 'dashboard', // <13>
++      description: "<a href=\"${dashboardURL}\">The project dashboard (${dashboardURL})</a> looks OK" // <14>
 +    ], [
 +      name: 'logs',
 +      description: "No new errors in <a href=\"${logURL}\">the project logs (${logURL})</a>"
@@ -187,13 +216,15 @@ container's entrypoint, instead of being used as its arguments. In Kubernetes
 terms, the `command` will be specified as the `command` field for the
 container, instead of `args`.
 <8> Optional. Additional arguments to `kubectl run`.
-<9> The tests and the other checks run in acceptance obviously vary by project.
-<10> Use `env.name` to customize links for the specific environment. It's one
+<9> Optional. These arguments are passed as is to
+{link-sh-docs}[`sh` Jenkins pipeline step].
+<10> The tests and the other checks run in acceptance obviously vary by project.
+<11> Use `env.name` to customize links for the specific environment. It's one
 of: `acceptance`, `beta`, `prod-us`, and `prod-eu`.
-<11> Use `env.domainName` to customize URLs. For example, it's
+<12> Use `env.domainName` to customize URLs. For example, it's
 `beta.salemove.com` in beta and `salemove.com` in prod US.
-<12> This should be a simple keyword.
-<13> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
+<13> This should be a simple keyword.
+<14> Blue Ocean UI https://issues.jenkins-ci.org/browse/JENKINS-41162[currently]
 doesn't display links, while the old one does. This means that links have to
 also be included in plain text, for Blue Ocean UI users to see/access them.
 
