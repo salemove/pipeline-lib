@@ -101,6 +101,11 @@ class Notify implements Serializable {
       " ${hereMDJobLink()} to continue the deployment."
     )
   }
+  def inputRequiredInBeta() {
+    script.pullRequest.comment(
+      "@${deployingUser()}, the changes have been deployed to beta. Please continue ${hereMDJobLink()}."
+    )
+  }
   def unexpectedArgs() {
     script.pullRequest.comment(
       "Sorry, I don't understand. I only support the '${Args.noGlobalLock}' argument." +

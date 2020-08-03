@@ -131,6 +131,7 @@ class Deployer implements Serializable {
             git.checkMasterHasNotChanged()
             github.checkPRMergeable(notifyOnInput: false)
             deploy(env: envs.beta, version: version)
+            notify.inputRequiredInBeta()
             waitForValidationIn(envs.beta)
             notify.prodDeploying(version)
 
