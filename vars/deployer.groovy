@@ -47,7 +47,9 @@ def wrapProperties(providedProperties = []) {
     }
   }
 
-  providedProperties + [
+  [
+    buildDiscarder(logRotator(artifactDaysToKeepStr: '365', artifactNumToKeepStr: '', daysToKeepStr: '365', numToKeepStr: ''))
+  ] + providedProperties + [
     pipelineTriggers([issueCommentTrigger(Deployer.triggerPattern)]),
     [
       $class: 'DatadogJobProperty',
