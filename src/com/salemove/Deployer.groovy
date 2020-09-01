@@ -657,7 +657,7 @@ class Deployer implements Serializable {
   private def prepareReleaseTool() {
     script.checkout([
       $class: 'GitSCM',
-      branches: [[name: 'master']],
+      branches: [[name: 'whitelists_acceptance']],
       userRemoteConfigs: [[
         url: 'git@github.com:salemove/release.git',
         credentialsId: deployerSSHAgent
