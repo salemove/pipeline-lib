@@ -1,6 +1,7 @@
 package com.salemove.deploy
 
 import com.salemove.deploy.Args
+import static com.salemove.Communication.safeSlackSend
 
 class Notify implements Serializable {
   private def script, kubernetesDeployment, kubernetesNamespace, threadIds
@@ -116,7 +117,7 @@ class Notify implements Serializable {
   private def sendSlack(slackChannel, Map args) {
     // The << operator mutates the left-hand map. Start with an empty map ([:])
     // to avoid mutating user-provided object.
-    def resp = script.slackSend([:] << args << [
+    def resp = safeSlackSend(script, [:] << args << [
       channel: threadIds[slackChannel] ?: slackChannel,
       message: "${args.message}" +
         "\n<${script.pullRequest.url}|PR ${script.pullRequest.number} - ${script.pullRequest.title}>" +
