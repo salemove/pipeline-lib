@@ -1,4 +1,5 @@
 import jenkins.model.*
+import static com.salemove.Communication.safeSlackSend
 
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
@@ -55,7 +56,7 @@ def call(Map args = [:], Closure body) {
   def threadId
   def sendStartMessage = { ->
     if (finalArgs.strategy == 'always') {
-      def resp = slackSend(channel: finalArgs.slackChannel, message: "Started: ${buildDescription}")
+      def resp = safeSlackSend(this, [channel: finalArgs.slackChannel, message: "Started: ${buildDescription}"])
       threadId = resp.threadId
     }
   }
@@ -75,37 +76,37 @@ def call(Map args = [:], Closure body) {
       case 'onMainBranchChange':
         if (statusChanged && env.BRANCH_NAME == finalArgs.mainBranch) {
           if (currentResult == 'SUCCESS') {
-            slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
+            safeSlackSend(this, [channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}"])
             mailSend(to: finalArgs.mailto, message: "Jenkins build is back to normal")
           } else {
-            slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+            safeSlackSend(this, [channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}"])
             mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
           }
         }
         break
       case 'onFailure':
         if (currentResult != 'SUCCESS') {
-          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+          safeSlackSend(this, [channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}"])
           mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
         }
         break
       case 'onFailureAndRecovery':
         if (currentResult == 'SUCCESS') {
           if (statusChanged) {
-            slackSend(channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}")
+            safeSlackSend(this, [channel: finalArgs.slackChannel, color: 'good', message: "Success: ${buildDescription}"])
             mailSend(to: finalArgs.mailto, message: "Jenkins build is back to normal")
           }
         } else {
-          slackSend(channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}")
+          safeSlackSend(this, [channel: finalArgs.slackChannel, color: 'danger', message: "Failure: ${buildDescription}"])
           mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
         }
         break
       case 'always':
         if (currentResult == 'SUCCESS') {
-          slackSend(channel: threadId, color: 'good', message: "Success: ${buildDescription}")
+          safeSlackSend(this, [channel: threadId, color: 'good', message: "Success: ${buildDescription}"])
           mailSend(to: finalArgs.mailto, message: "Jenkins build successful")
         } else {
-          slackSend(channel: threadId, color: 'danger', replyBroadcast: true, message: "Failure: ${buildDescription}")
+          safeSlackSend(this, [channel: threadId, color: 'danger', replyBroadcast: true, message: "Failure: ${buildDescription}"])
           mailSend(to: finalArgs.mailto, message: "Build failed in Jenkins", log: true)
         }
         break
