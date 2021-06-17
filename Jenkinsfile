@@ -31,7 +31,7 @@ def expectedResponse = { buildVersion, deployVersion, envName ->
 properties(deployer.wrapProperties())
 
 withResultReporting(slackChannel: '#tm-inf') {
-  inDockerAgent(deployer.wrapPodTemplate()) {
+  inDockerAgent(useBuildKit: true) {
     checkout(scm)
     def buildVersion = sh(script: 'git log -n 1 --pretty=format:\'%h\'', returnStdout: true).trim()
     def image = deployer.buildImageIfDoesNotExist(name: projectName) {

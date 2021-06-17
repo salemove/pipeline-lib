@@ -3,8 +3,9 @@ import static com.salemove.Collections.addWithoutDuplicates
 def call(Map args = [:], Closure body) {
   def defaultArgs = [
     name: 'pipeline-docker-build',
-    containers: [agentContainer(image: 'salemove/jenkins-agent-docker:17.12.0-be4ccb0')],
-    volumes: [hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')]
+    containers: [agentContainer(image: 'salemove/jenkins-agent-docker:19.03.15')],
+    volumes: [hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')],
+    useBuildKit: false
   ]
 
   // For containers and volumes (list arguments), add the lists together, but
@@ -18,7 +19,12 @@ def call(Map args = [:], Closure body) {
     volumes: finalVolumes
   ]
 
+  def useBuildKit = finalArgs.useBuildKit ? '1' : '0'
+  finalArgs.remove('useBuildKit')
+
   inPod(finalArgs) {
-    body()
+    withEnv(["DOCKER_BUILDKIT=${useBuildKit}"]) {
+      body()
+    }
   }
 }
