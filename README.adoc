@@ -323,6 +323,7 @@ share the same `workingDir`, which makes them work nicely together.
 
 === `inDockerAgent`
 :link-docker-build: https://jenkins.io/doc/book/pipeline/docker/#building-containers
+:link-docker-buildkit: https://docs.docker.com/develop/develop-images/build_enhancements/
 
 A pod template for building docker containers.
 
@@ -331,6 +332,9 @@ container named `jnlp`, in which all commands will run by default, unless
 the container is changed with `container`.] which supports building docker
 images. So if you need to run {link-docker-build}[`docker.build`], use
 `inDockerAgent` instead of `inPod`.
+
+`inDockerAgent` accepts argument `useBuildKit: true` which forces Docker to use
+{link-docker-buildkit}[BuildKit] for building images.
 
 NOTE: `inDockerAgent` is a derivative of <<code-inpod-code>>, so everything
 that applies to `inPod` also applies to `inDockerAgent`.
